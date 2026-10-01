@@ -121,8 +121,10 @@ repositories {
 val ffmpegNativesVersion = if (mcVersion.startsWith("1.")) "6.1.1-1.5.10" else "8.1.2-1.5.14"
 val javacppNativesVersion = if (mcVersion.startsWith("1.")) "1.5.10" else "1.5.14"
 
-val ffmpegNatives by configurations.creating { isTransitive = false }
-val javacppNatives by configurations.creating { isTransitive = false }
+// Gradle 9.6 弃用了 `by configurations.creating` 委托，改用 create()（名字不变，
+// 下方 add(ffmpegNatives.name, ...) 依赖的仍是 "ffmpegNatives"）。
+val ffmpegNatives = configurations.create("ffmpegNatives") { isTransitive = false }
+val javacppNatives = configurations.create("javacppNatives") { isTransitive = false }
 
 dependencies {
     minecraft("com.mojang:minecraft:$mcVersion")
