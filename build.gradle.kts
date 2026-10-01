@@ -165,6 +165,15 @@ tasks.processResources {
         )
     }
 
+    // Injects the natives versions AndroidNatives reads at runtime to segment its extract
+    // folders per FFmpeg/JavaCPP version, keeping the two Minecraft versions' files apart.
+    filesMatching("flashbackandroidfix-natives.properties") {
+        expand(
+            "ffmpeg_natives" to ffmpegNativesVersion,
+            "javacpp_natives" to javacppNativesVersion
+        )
+    }
+
     from({ zipTree(ffmpegNatives.singleFile) }) {
         include("lib/arm64-v8a/**")
         eachFile(Action<FileCopyDetails> { path = "natives/ffmpeg-natives/arm64-v8a/$name" })

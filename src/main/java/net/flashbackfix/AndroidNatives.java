@@ -8,6 +8,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,6 +37,21 @@ public final class AndroidNatives {
     private static final String FFMPEG_PREFIX = "/natives/ffmpeg-natives/";
     private static final String JAVACPP_PREFIX = "/natives/javacpp-natives/";
     private static final String IMGUI_PREFIX = "/natives/imgui-natives/";
+
+    /**
+     * Version segment inside the on-disk extract folder, e.g.
+     * {@code ffmpeg-natives/6.1.1-1.5.10/arm64-v8a/libjniavcodec.so}, baked in by
+     * {@code processResources} through {@code flashbackandroidfix-natives.properties}.
+     *
+     * <p>Every Minecraft version running this mod extracts into the same root, and library file
+     * names are identical across versions while their contents differ (FFmpeg 6 vs 8, JavaCPP
+     * 1.5.10 vs 1.5.14). A leftover file from the other version then gets loaded by the wrong
+     * bindings and the export window dies with {@code UnsatisfiedLinkError} probing
+     * {@code avcodec_close} - an API FFmpeg 8 removed. Versioned folders make that overlap
+     * impossible rather than guarding against it after the fact.
+     */
+    private static final String FFMPEG_VERSION = nativesVersion("ffmpeg");
+    private static final String JAVACPP_VERSION = nativesVersion("javacpp");
 
     private AndroidNatives() {}
 
@@ -74,9 +90,9 @@ public final class AndroidNatives {
         if (arch == null) return null;
 
         String fileName = fileName(name);
-        URL[] hit = resolveFrom(FFMPEG_PREFIX, "ffmpeg-natives", arch, fileName);
+        URL[] hit = resolveFrom(FFMPEG_PREFIX, "ffmpeg-natives/" + FFMPEG_VERSION, arch, fileName);
         if (hit != null) return hit;
-        return resolveFrom(JAVACPP_PREFIX, "javacpp-natives", arch, fileName);
+        return resolveFrom(JAVACPP_PREFIX, "javacpp-natives/" + JAVACPP_VERSION, arch, fileName);
     }
 
     private static URL[] resolveFrom(String prefix, String folder, String arch, String fileName) {
@@ -87,6 +103,32 @@ public final class AndroidNatives {
         Path root = extractRoot();
         if (root == null) return null;
         return extract(source, resource, root.resolve(folder).resolve(arch).resolve(fileName));
+    }
+
+    /**
+     * Reads one version key from {@code flashbackandroidfix-natives.properties}, which
+     * {@code processResources} fills in at build time. Should the file ever go missing the
+     * folder degrades to a shared {@code unversioned} segment - both Minecraft versions would
+     * land in it again (behaving exactly like the pre-isolation layout), but a warning in the
+     * log makes that visible instead of silent.
+     */
+    private static String nativesVersion(String key) {
+        String value = null;
+        try (InputStream in = AndroidNatives.class.getResourceAsStream("/flashbackandroidfix-natives.properties")) {
+            if (in != null) {
+                Properties props = new Properties();
+                props.load(in);
+                value = props.getProperty(key);
+            }
+        } catch (Exception e) {
+            Flashback.LOGGER.warn("[flashback-androidfix] Cannot read flashbackandroidfix-natives.properties", e);
+        }
+        if (value == null || value.trim().isEmpty()) {
+            Flashback.LOGGER.warn("[flashback-androidfix] No '{}' version in flashbackandroidfix-natives.properties; "
+                    + "extracting into the shared unversioned folder", key);
+            return "unversioned";
+        }
+        return value.trim();
     }
 
     /**
