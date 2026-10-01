@@ -6,6 +6,8 @@ loomx.loom_remap_plugin = "net.fabricmc.fabric-loom-remap"
 loomx.loom_unobf_plugin = "net.fabricmc.fabric-loom"
 mc.version = "[VERSIONED]"
 mc.targets = "[VERSIONED]"
+ffmpeg_natives = "8.1.2-1.5.14"
+javacpp_natives = "1.5.14"
 
 ["1.21.11"]
 mc.version = "1.21.11"
@@ -13,6 +15,8 @@ mc.targets = "1.21.11"
 deps.fabric_loader = "0.15.10"
 deps.flashback = ">=0.39.10"
 java.release = 21
+ffmpeg_natives = "6.1.1-1.5.10"
+javacpp_natives = "1.5.10"
 
 ["26.1.2"]
 mc.version = "26.1.2"

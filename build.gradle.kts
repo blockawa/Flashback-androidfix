@@ -19,6 +19,8 @@ val loaderVersion = property("deps.fabric_loader") as String
 val flashbackDep = property("deps.flashback") as String
 val javaRelease = (property("java.release") as String).toInt()
 val imguiFixEnabled = file("resources/flashbackandroidfix-imgui.mixins.json").isFile
+// 1.21.11 only: 26.x downloads frames through blaze3d's CommandEncoder instead of a raw PBO.
+val saveableFbFixEnabled = file("resources/flashbackandroidfix-saveablefb.mixins.json").isFile
 val versionJavaDir = file("java")
 val versionResourcesDir = file("resources")
 val mainSourceSet = sourceSets["main"]
@@ -115,11 +117,12 @@ repositories {
 
 // FFmpeg / JavaCPP natives come straight from Maven Central instead of being committed to
 // deps/, and their versions must match the javacpp bindings Flashback bundles for this
-// Minecraft version: 1.21.11's Flashback ships ffmpeg 6.1.1-1.5.10 bindings, 26.x ships
-// 8.1.2-1.5.14. A mismatch loads a libavcodec.so that lacks e.g. avcodec_close() and the
-// export window dies with UnsatisfiedLinkError while probing encoders (see README).
-val ffmpegNativesVersion = if (mcVersion.startsWith("1.")) "6.1.1-1.5.10" else "8.1.2-1.5.14"
-val javacppNativesVersion = if (mcVersion.startsWith("1.")) "1.5.10" else "1.5.14"
+// Minecraft version; they are configured per version in stonecutter.properties.toml
+// (1.21.11: 6.1.1-1.5.10, 26.x: 8.1.2-1.5.14). A mismatch loads a libavcodec.so that lacks
+// e.g. avcodec_close() and the export window dies with UnsatisfiedLinkError while probing
+// encoders (see README).
+val ffmpegNativesVersion = sc.properties["ffmpeg_natives"] as String
+val javacppNativesVersion = sc.properties["javacpp_natives"] as String
 
 // Gradle 9.6 弃用了 `by configurations.creating` 委托，改用 create()（名字不变，
 // 下方 add(ffmpegNatives.name, ...) 依赖的仍是 "ffmpegNatives"）。
@@ -161,6 +164,7 @@ tasks.processResources {
             "java" to javaRelease,
             "flashback" to flashbackDep,
             "imgui_mixins_extra" to (if (imguiFixEnabled) ", \"flashbackandroidfix-imgui.mixins.json\"" else ""),
+            "saveablefb_mixins_extra" to (if (saveableFbFixEnabled) ", \"flashbackandroidfix-saveablefb.mixins.json\"" else ""),
             "access_widener" to (if (accessWidenerEnabled) "\"accessWidener\": \"flashbackandroidfix.accesswidener\"," else "")
         )
     }
