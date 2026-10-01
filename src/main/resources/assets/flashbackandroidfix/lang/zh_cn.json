@@ -1,0 +1,23 @@
+{
+  "modmenu.nameTranslation.flashbackandroidfix": "Flashback 安卓修复",
+  "modmenu.descriptionTranslation.flashbackandroidfix": "导出时直接写入游戏目录内的文件夹，不再弹出系统文件对话框。",
+
+  "flashbackandroidfix.export_location": "导出位置",
+  "flashbackandroidfix.browse": "浏览...",
+  "flashbackandroidfix.path_hint": "可填相对游戏目录的路径，也可填绝对路径，按回车即可创建。",
+  "flashbackandroidfix.path_tooltip": "完整路径：%s",
+  "flashbackandroidfix.forced_tooltip": "导出路径由强制设置决定：%s",
+
+  "flashbackandroidfix.picker_title": "选择导出文件夹",
+  "flashbackandroidfix.picker_up": "..",
+  "flashbackandroidfix.picker_empty": "没有子文件夹",
+  "flashbackandroidfix.picker_select": "选择此文件夹",
+
+  "flashbackandroidfix.interface_size": "界面大小",
+  "flashbackandroidfix.interface_scale": "界面缩放",
+  "flashbackandroidfix.interface_tooltip": "拖动设置界面缩放（0.25 - 4），点「重新应用」后生效并重建字体。",
+  "flashbackandroidfix.interface_pending": "尚未应用",
+  "flashbackandroidfix.interface_reload": "重新应用",
+  "flashbackandroidfix.interface_reset": "重置",
+  "flashbackandroidfix.interface_reset_tooltip": "把缩放恢复为 1.0（默认）"
+}

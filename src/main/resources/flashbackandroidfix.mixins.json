@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "package": "net.flashbackfix.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ExportScreenshotWindowMixin",
+    "LoaderMixin",
+    "PreferencesWindowMixin",
+    "ReplayUIMixin",
+    "StartExportWindowMixin",
+    "VideoCodecMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,4 @@
+classTweaker v2 official
+
+# B3D imgui renderer registers its custom pipeline at runtime
+accessible method net/minecraft/client/renderer/RenderPipelines register (Lcom/mojang/blaze3d/pipeline/RenderPipeline;)Lcom/mojang/blaze3d/pipeline/RenderPipeline;

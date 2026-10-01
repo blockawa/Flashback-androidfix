@@ -1,0 +1,23 @@
+{
+  "modmenu.nameTranslation.flashbackandroidfix": "Flashback Android Fix",
+  "modmenu.descriptionTranslation.flashbackandroidfix": "Exports straight to a folder inside the game directory instead of opening the native file dialog.",
+
+  "flashbackandroidfix.export_location": "Export Location",
+  "flashbackandroidfix.browse": "Browse...",
+  "flashbackandroidfix.path_hint": "Relative to the game folder, or an absolute path. Press Enter to create it.",
+  "flashbackandroidfix.path_tooltip": "Full path: %s",
+  "flashbackandroidfix.forced_tooltip": "The export path is forced by the current settings: %s",
+
+  "flashbackandroidfix.picker_title": "Select Export Folder",
+  "flashbackandroidfix.picker_up": "..",
+  "flashbackandroidfix.picker_empty": "No subfolders",
+  "flashbackandroidfix.picker_select": "Select This Folder",
+
+  "flashbackandroidfix.interface_size": "Interface Size",
+  "flashbackandroidfix.interface_scale": "UI Scale",
+  "flashbackandroidfix.interface_tooltip": "Drag to set the interface scale (0.25 - 4). The value is only applied after Reload, which also rebuilds the fonts.",
+  "flashbackandroidfix.interface_pending": "Not applied yet",
+  "flashbackandroidfix.interface_reload": "Reload",
+  "flashbackandroidfix.interface_reset": "Reset",
+  "flashbackandroidfix.interface_reset_tooltip": "Reset the scale to 1.0 (default)"
+}

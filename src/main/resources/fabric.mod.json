@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "flashbackandroidfix",
+  "version": "${version}",
+  "name": "Flashback Android Fix",
+  "description": "Exports straight to a folder inside the game directory instead of opening the native file dialog, which hangs on Android.",
+  "authors": [
+    "Flashback Android Fix"
+  ],
+  "license": "All Rights Reserved",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "net.flashbackfix.AndroidNativesInit"
+    ]
+  },
+  "mixins": [
+    "flashbackandroidfix.mixins.json"${imgui_mixins_extra}
+  ],
+  ${access_widener}
+  "depends": {
+    "fabricloader": ">=${fabric_loader}",
+    "minecraft": "${mc_targets}",
+    "java": ">=${java}",
+    "flashback": "${flashback}"
+  }
+}

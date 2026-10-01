@@ -1,0 +1,16 @@
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+!deps/*.jar
+build/
+out/
+run/
+.gradle/
+remappedSrc/
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+bin/
