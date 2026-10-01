@@ -21,10 +21,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * <p>Injects on RETURN rather than HEAD: the vanilla body is what creates
  * {@code uploaded}, and the 1.21.11 {@code thumbnail} field is final, so there
  * is no need to shadow it.
+ *
+ * <p>Remap stays ON (unlike the diagnostic mixins): {@code uploaded}'s
+ * descriptor mentions the Minecraft class DynamicTexture, and this 1.21.11
+ * jar runs against intermediary mappings while the mod compiles against
+ * Mojmap — with remap=false the shadow descriptor would never be rewritten
+ * and would not match Flashback's field in production. The mod-side method
+ * name getThumbnailTextureId has no mapping entry and is kept as-is, the
+ * same way ReplayUIGuardMixin keeps drawOverlay.
  */
 @Mixin(
     targets = "com.moulberry.flashback.editor.ui.windows.ExportDoneWindow$FinishedExportEntry",
-    remap = false
+    remap = true
 )
 public class ExportThumbnailTextureMixin {
 
