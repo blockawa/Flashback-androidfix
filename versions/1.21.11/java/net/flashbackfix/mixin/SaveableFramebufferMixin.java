@@ -59,7 +59,7 @@ public class SaveableFramebufferMixin {
     private @Nullable ByteBuffer flashbackandroidfix$syncBuffer;
 
     @Inject(
-        method = "startDownload(Lcom/mojang/blaze3d/textures/GpuTexture;II)V",
+        method = "startDownload",
         at = @At("HEAD"),
         cancellable = true
     )
@@ -101,7 +101,7 @@ public class SaveableFramebufferMixin {
     }
 
     @Inject(
-        method = "finishDownload(II)Lcom/mojang/blaze3d/platform/NativeImage;",
+        method = "finishDownload",
         at = @At("HEAD"),
         cancellable = true
     )
@@ -161,7 +161,7 @@ public class SaveableFramebufferMixin {
         cir.setReturnValue(nativeImage);
     }
 
-    @Inject(method = "close()V", at = @At("TAIL"))
+    @Inject(method = "close", at = @At("TAIL"))
     private void flashbackandroidfix$releaseSyncBuffer(CallbackInfo ci) {
         if (this.flashbackandroidfix$syncBuffer != null) {
             MemoryUtil.memFree(this.flashbackandroidfix$syncBuffer);
