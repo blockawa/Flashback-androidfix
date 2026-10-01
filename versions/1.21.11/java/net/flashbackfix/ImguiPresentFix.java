@@ -39,6 +39,34 @@ public final class ImguiPresentFix {
         }
     }
 
+    /** Bug 1 诊断：updateMousePosAndButtons 处理前的原始鼠标状态（HEAD 记录）。 */
+    private static float recRawMouseX;
+    private static float recRawMouseY;
+    private static boolean recFocused;
+    private static boolean recMouseOnWin;
+    private static int recCursorMode;
+    /** 本帧 MousePos 修复是否触发（TAIL 记录）。 */
+    private static boolean recRepaired;
+
+    public static void recordMouseState(float rawX, float rawY, boolean focused,
+                                        boolean mouseOnWin, int cursorMode) {
+        if (!INPUT_DEBUG) {
+            return;
+        }
+        recRawMouseX = rawX;
+        recRawMouseY = rawY;
+        recFocused = focused;
+        recMouseOnWin = mouseOnWin;
+        recCursorMode = cursorMode;
+    }
+
+    public static void recordRepaired(boolean repaired) {
+        if (!INPUT_DEBUG) {
+            return;
+        }
+        recRepaired = repaired;
+    }
+
     /**
      * Bug 1 诊断：每帧快照输入链路的各道门（isActive/hasDialog/grabbed/
      * handledBy/wantCapture*）。离散状态变化时立刻打一条，否则每 10 秒
@@ -69,6 +97,11 @@ public final class ImguiPresentFix {
                 mouseX = io.getMousePosX();
                 mouseY = io.getMousePosY();
             }
+            state.append(" rawValid=").append(recRawMouseX > -1.0E30f)
+                    .append(" mouseOnWin=").append(recMouseOnWin)
+                    .append(" focused=").append(recFocused)
+                    .append(" cursorMode=").append(recCursorMode)
+                    .append(" fixed=").append(recRepaired);
             long now = System.currentTimeMillis();
             if (!state.toString().equals(lastInputState)) {
                 lastInputState = state.toString();
@@ -76,8 +109,8 @@ public final class ImguiPresentFix {
                 Flashback.LOGGER.info("[flashback-androidfix][input] state {}", lastInputState);
             } else if (now - lastInputLogTime >= 10_000) {
                 lastInputLogTime = now;
-                Flashback.LOGGER.info("[flashback-androidfix][input] heartbeat {} mouse=({},{})",
-                        lastInputState, mouseX, mouseY);
+                Flashback.LOGGER.info("[flashback-androidfix][input] heartbeat {} mouse=({},{}) rawMouse=({},{})",
+                        lastInputState, mouseX, mouseY, recRawMouseX, recRawMouseY);
             }
         } catch (Throwable t) {
             Flashback.LOGGER.error("[flashback-androidfix][input] snapshot failed", t);
