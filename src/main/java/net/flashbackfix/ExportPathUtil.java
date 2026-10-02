@@ -2,7 +2,12 @@ package net.flashbackfix;
 
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.configuration.FlashbackConfigV1;
+import com.moulberry.flashback.editor.ui.ImGuiHelper;
+import com.moulberry.flashback.editor.ui.ReplayUI;
+import imgui.moulberry90.ImGui;
+import imgui.moulberry90.type.ImString;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.resources.language.I18n;
 
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -164,5 +169,135 @@ public final class ExportPathUtil {
         } catch (Exception ignored) {
             config.delayedSaveToDefaultFolder();
         }
+    }
+
+    // ==================== Preferences 窗口的导出文件夹选择器 UI ====================
+    // 原独立类 ExportPathUi 内联至此，与路径规则共居一文件。
+
+    private static final ImString pathInput = ImGuiHelper.createResizableImString("");
+    private static final String POPUP_SUFFIX = "###flashbackandroidfix_picker";
+
+    private static String syncedPath = null;
+    private static Path pickerDir = null;
+
+    /**
+     * 画在 Flashback Preferences 窗口里的导出文件夹选择器：路径输入框 + Browse 按钮，
+     * 点开的是自制 ImGui 目录浏览器，替代安卓上会卡死的原生对话框。
+     *
+     * <p>路径语义见本类上半部分（相对路径对游戏目录解析、绝对路径原样采用——
+     * ReplayMod 的 {@code advanced.renderPath} 规则）。
+     */
+    public static void renderPathUi(FlashbackConfigV1 config) {
+        Path folder = configuredFolder(config);
+
+        ImGuiHelper.separatorWithText(I18n.get("flashbackandroidfix.export_location"));
+
+        if (isPathForced(config)) {
+            ImGui.textDisabled(relativeDisplay(folder));
+            ImGuiHelper.tooltip(I18n.get("flashbackandroidfix.forced_tooltip", String.valueOf(folder)));
+            return;
+        }
+
+        String current = relativeDisplay(folder);
+        if (!current.equals(syncedPath)) {
+            pathInput.set(current);
+            syncedPath = current;
+        }
+
+        String browseLabel = I18n.get("flashbackandroidfix.browse");
+        float browseWidth = ImGuiHelper.calcTextWidth(browseLabel) + 16f;
+        float spacing = ImGui.getStyle().getItemSpacingX();
+
+        ImGui.setNextItemWidth(Math.max(80f, ImGui.getContentRegionAvailX() - browseWidth - spacing));
+        ImGui.inputText("##flashbackandroidfix_path", pathInput);
+        if (ImGui.isItemDeactivatedAfterEdit()) {
+            applyFromInput(config);
+        }
+        ImGuiHelper.tooltip(I18n.get("flashbackandroidfix.path_tooltip", String.valueOf(folder)));
+
+        ImGui.sameLine();
+        if (ImGui.button(browseLabel, browseWidth, 0)) {
+            pickerDir = folder;
+            ImGui.openPopup(pickerPopup());
+        }
+
+        ImGui.textDisabled(I18n.get("flashbackandroidfix.path_hint"));
+
+        renderPicker(config);
+    }
+
+    private static void applyFromInput(FlashbackConfigV1 config) {
+        Path resolved = resolvePath(ImGuiHelper.getString(pathInput));
+        if (resolved == null) {
+            // 路径不合法——丢弃这次编辑，重新显示已存值
+            syncedPath = null;
+            return;
+        }
+        applyFolder(config, resolved);
+    }
+
+    private static String pickerPopup() {
+        return I18n.get("flashbackandroidfix.picker_title") + POPUP_SUFFIX;
+    }
+
+    private static void renderPicker(FlashbackConfigV1 config) {
+        Path gameDir = gameDir();
+        if (gameDir == null) return;
+
+        ImGui.setNextWindowSize(ReplayUI.scaleUi(380), 0);
+        if (!ImGui.beginPopupModal(pickerPopup())) {
+            return;
+        }
+
+        Path dir = pickerDir;
+        if (dir == null) {
+            dir = gameDir;
+            pickerDir = dir;
+        }
+
+        ImGui.textWrapped(relativeDisplay(dir));
+
+        Path parent = dir.getParent();
+        if (parent == null) {
+            ImGui.beginDisabled();
+            ImGui.button(I18n.get("flashbackandroidfix.picker_up"));
+            ImGui.endDisabled();
+        } else if (ImGui.button(I18n.get("flashbackandroidfix.picker_up"))) {
+            pickerDir = parent;
+        }
+
+        float childWidth = ImGui.getContentRegionAvailX();
+        ImGui.beginChild("##flashbackandroidfix_dirs", childWidth, ReplayUI.scaleUi(220), true);
+
+        List<Path> subDirectories = listSubdirectories(dir);
+        if (subDirectories.isEmpty()) {
+            ImGui.textDisabled(I18n.get("flashbackandroidfix.picker_empty"));
+        } else {
+            float rowWidth = ImGui.getContentRegionAvailX();
+            for (Path sub : subDirectories) {
+                ImGui.pushID(sub.toString());
+                boolean clicked = ImGui.button(sub.getFileName().toString(), rowWidth, 0);
+                ImGui.popID();
+                if (clicked) {
+                    pickerDir = sub;
+                    break;
+                }
+            }
+        }
+        ImGui.endChild();
+
+        float buttonSpacing = ImGui.getStyle().getItemSpacingX();
+        float buttonWidth = (ImGui.getContentRegionAvailX() - buttonSpacing) / 2f;
+
+        if (ImGui.button(I18n.get("flashbackandroidfix.picker_select"), buttonWidth, 0)) {
+            applyFolder(config, pickerDir);
+            ImGui.closeCurrentPopup();
+        }
+        ImGui.sameLine();
+        if (ImGui.button(I18n.get("gui.cancel"), buttonWidth, 0)) {
+            ImGui.closeCurrentPopup();
+        }
+
+        ImGui.endPopup();
     }
 }

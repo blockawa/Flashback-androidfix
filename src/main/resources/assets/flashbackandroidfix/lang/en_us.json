@@ -15,9 +15,7 @@
 
   "flashbackandroidfix.interface_size": "Interface Size",
   "flashbackandroidfix.interface_scale": "UI Scale",
-  "flashbackandroidfix.interface_tooltip": "Drag to set the interface scale (0.25 - 4). The value is only applied after Reload, which also rebuilds the fonts.",
-  "flashbackandroidfix.interface_pending": "Not applied yet",
-  "flashbackandroidfix.interface_reload": "Reload",
+  "flashbackandroidfix.interface_tooltip": "Drag to set the interface scale (0.25 - 4). Applies immediately.",
   "flashbackandroidfix.interface_reset": "Reset",
   "flashbackandroidfix.interface_reset_tooltip": "Reset the scale to 1.0 (default)"
 }

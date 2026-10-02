@@ -8,13 +8,13 @@
     "PreferencesWindowMixin",
     "ReplayUIMixin",
     "StartExportWindowMixin",
-    "VideoCodecMixin",
     "ReplayUIGuardMixin",
     "FinalBackbufferSampleMixin",
     "CustomImGuiImplGl3DelegateMixin",
     "ExportThumbnailTextureMixin",
     "SaveableFramebufferMixin",
-    "SampleFormatGuardMixin"
+    "SampleFormatGuardMixin",
+    "JavacvNdkCodecMixin"
   ],
   "injectors": {
     "defaultRequire": 1

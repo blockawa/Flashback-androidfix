@@ -8,12 +8,12 @@
     "PreferencesWindowMixin",
     "ReplayUIMixin",
     "StartExportWindowMixin",
-    "VideoCodecMixin",
     "ReplayUIGuardMixin",
     "FinalBackbufferSampleMixin",
     "CustomImGuiImplGl3DelegateMixin",
     "ExportThumbnailTextureMixin",
-    "SampleFormatGuardMixin"
+    "SampleFormatGuardMixin",
+    "FlashbackFFmpegNdkCodecMixin"
   ],
   "injectors": {
     "defaultRequire": 1

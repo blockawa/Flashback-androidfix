@@ -9,13 +9,12 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Pushes the interface scale confirmed with the Reload button into {@link ReplayUI#newGlobalScale}
- * before Flashback's own scale handling runs.
+ * 把 {@link FixConfig#appliedScale()} 的界面缩放推入 {@link ReplayUI#newGlobalScale}，
+ * 在 Flashback 自身的缩放处理之前执行。
  *
- * <p>That block quantizes the value, clamps it to 0.25-4, assigns {@code globalScale} and
- * rebuilds the fonts when the pixel font size changes - so applying the setting takes effect in
- * one frame, including font regeneration, without touching Flashback sources. Values edited in
- * the Preferences window are not pushed here until Reload is pressed.
+ * <p>那段逻辑自带量化、0.25-4 钳位、赋值 {@code globalScale}，且仅像素字体尺寸跨档时才
+ * 重建字体——所以缩放变更一帧内生效（含按需字体重建），无需改 Flashback 源码。偏好设置里
+ * 滑块一动 {@code apply()} 即更新 appliedScale，下一帧这里推的就是新值（实时生效）。
  */
 @Mixin(value = ReplayUI.class, remap = false)
 public class ReplayUIMixin {

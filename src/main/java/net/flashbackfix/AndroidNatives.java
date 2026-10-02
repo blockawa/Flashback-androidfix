@@ -1,6 +1,7 @@
 package net.flashbackfix;
 
 import com.moulberry.flashback.Flashback;
+import net.fabricmc.api.ClientModInitializer;
 
 import java.io.File;
 import java.io.InputStream;
@@ -29,7 +30,7 @@ import java.util.regex.Pattern;
  * the jar, drop it into a writable directory the linker accepts (app cache on Android,
  * game directory elsewhere) and give the loader a plain file path.
  */
-public final class AndroidNatives {
+public final class AndroidNatives implements ClientModInitializer {
 
     /** Matches {@code imgui.moulberry90.ImGui}'s own default. */
     private static final String IMGUI_LIBRARY_NAME = "imgui-moulberry90-java64";
@@ -53,7 +54,26 @@ public final class AndroidNatives {
     private static final String FFMPEG_VERSION = nativesVersion("ffmpeg");
     private static final String JAVACPP_VERSION = nativesVersion("javacpp");
 
-    private AndroidNatives() {}
+    /**
+     * Fabric entrypoint 需要可访问的构造器：本类同时是 {@code fabric.mod.json} 注册的
+     * client 入口（见 {@link #onInitializeClient()}）。
+     */
+    public AndroidNatives() {}
+
+    /**
+     * 必须在任何代码碰到 {@code imgui.moulberry90.ImGui} 之前运行——ImGui 的静态初始化器
+     * 只读一次 {@code imgui.library.path}。FFmpeg 不需要入口点：它在首次导出时才加载，
+     * 远晚于 mixin 应用。
+     */
+    @Override
+    public void onInitializeClient() {
+        try {
+            installImgui();
+        } catch (Throwable t) {
+            Flashback.LOGGER.warn(
+                    "[flashback-androidfix] imgui natives not installed, using Flashback's copy", t);
+        }
+    }
 
     /**
      * Folder inside this mod jar for the current CPU, or {@code null} when unsupported.

@@ -11,7 +11,7 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "net.flashbackfix.AndroidNativesInit"
+      "net.flashbackfix.AndroidNatives"
     ]
   },
   "mixins": [

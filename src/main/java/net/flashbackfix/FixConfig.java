@@ -8,11 +8,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Settings owned by this mod: {@code config/flashback/flashback-androidfix.json}.
+ * 本 mod 自有的设置：{@code config/flashback/flashback-androidfix.json}。
  *
- * <p>Holds the imgui interface scale. Editing it only changes the stored value; it becomes
- * active when the Reload button in the Preferences window calls {@link #apply()}, which saves
- * it and hands it to {@code ReplayUIMixin} through {@link #appliedScale()}.
+ * <p>存放 imgui 界面缩放。滑块或重置按钮改动时立即调用 {@link #apply()}——写盘并把值交给
+ * {@link #appliedScale()}，下一帧经 {@code ReplayUIMixin} 实时生效，无需手动确认。
  */
 public final class FixConfig {
 
