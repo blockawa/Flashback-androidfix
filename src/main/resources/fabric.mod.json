@@ -15,7 +15,7 @@
     ]
   },
   "mixins": [
-    "flashbackandroidfix.mixins.json"${imgui_mixins_extra}${saveablefb_mixins_extra}
+    "flashbackandroidfix.mixins.json"${imgui_mixins_extra}
   ],
   ${access_widener}
   "depends": {

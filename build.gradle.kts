@@ -18,9 +18,10 @@ val mcTargets = sc.properties["mc.targets"] as String
 val loaderVersion = property("deps.fabric_loader") as String
 val flashbackDep = property("deps.flashback") as String
 val javaRelease = (property("java.release") as String).toInt()
+// 开关按"版本 resources 目录里是否存在该 json"判定（文件即开关，26.2/26.3 无版本目录自动关闭）。
+// 1.21.11 的 imgui json 兼并了 SaveableFramebufferMixin：26.x 走 blaze3d CommandEncoder
+// 下载帧数据而非原生 PBO，没有可修的 SaveableFramebuffer。
 val imguiFixEnabled = file("resources/flashbackandroidfix-imgui.mixins.json").isFile
-// 1.21.11 only: 26.x downloads frames through blaze3d's CommandEncoder instead of a raw PBO.
-val saveableFbFixEnabled = file("resources/flashbackandroidfix-saveablefb.mixins.json").isFile
 val versionJavaDir = file("java")
 val versionResourcesDir = file("resources")
 val mainSourceSet = sourceSets["main"]
@@ -164,7 +165,6 @@ tasks.processResources {
             "java" to javaRelease,
             "flashback" to flashbackDep,
             "imgui_mixins_extra" to (if (imguiFixEnabled) ", \"flashbackandroidfix-imgui.mixins.json\"" else ""),
-            "saveablefb_mixins_extra" to (if (saveableFbFixEnabled) ", \"flashbackandroidfix-saveablefb.mixins.json\"" else ""),
             "access_widener" to (if (accessWidenerEnabled) "\"accessWidener\": \"flashbackandroidfix.accesswidener\"," else "")
         )
     }

@@ -7,7 +7,8 @@
     "FinalBackbufferSampleMixin",
     "CustomImGuiImplGl3DelegateMixin",
     "ExportThumbnailTextureMixin",
-    "InputDebugMixin"
+    "InputDebugMixin",
+    "SaveableFramebufferMixin"
   ],
   "injectors": {
     "defaultRequire": 1
