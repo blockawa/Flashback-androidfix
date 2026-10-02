@@ -143,9 +143,10 @@ val imguiNativesJar = rootProject.file("deps/imgui-natives-android-arm64.jar")
 
 tasks.processResources {
     // versions/<ver>/resources/flashbackandroidfix.mixins.json 与 src/main 同名共存。
-    // Gradle 9 遇重复条目默认直接 FAIL，REPLACE 让后追加的版本目录覆盖共享版，
+    // Gradle 9 遇重复条目默认 FAIL，显式设 INCLUDE：processResources 输出为目录（不支持
+    // 重复条目），语义即后到者覆盖——版本目录在 srcDir 追加顺序之后，共享版被版本版覆盖，
     // 实现"版本全量 json 覆盖 src/main 共享 json"的单 json 结构（26.2/26.3 无版本目录走共享版）。
-    duplicatesStrategy = DuplicatesStrategy.REPLACE
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 
     inputs.property("version", version)
     inputs.property("mc_targets", mcTargets)
