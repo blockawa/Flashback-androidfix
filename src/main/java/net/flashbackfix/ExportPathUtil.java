@@ -138,15 +138,14 @@ public final class ExportPathUtil {
         return folder.toString();
     }
 
-    /** Immediate sub folders of {@code folder}, sorted, hidden folders skipped. */
+    /** Immediate sub folders of {@code folder}, sorted, including dot-prefixed ones. */
     public static List<Path> listSubdirectories(Path folder) {
         if (folder == null || !Files.isDirectory(folder)) return List.of();
 
         List<Path> dirs = new ArrayList<>();
         try (var stream = Files.list(folder)) {
             stream.filter(Files::isDirectory)
-                    .filter(path -> path.getFileName() != null
-                            && !path.getFileName().toString().startsWith("."))
+                    .filter(path -> path.getFileName() != null)
                     .sorted()
                     .forEach(dirs::add);
         } catch (Exception e) {
