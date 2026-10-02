@@ -10,7 +10,9 @@
     "StartExportWindowMixin",
     "VideoCodecMixin",
     "SampleFormatGuardMixin",
-    "SaveableFramebufferMixin"
+    "SaveableFramebufferMixin",
+    "ReplayUIGuardMixin",
+    "FlushDeferredResizeMixin"
   ],
   "injectors": {
     "defaultRequire": 1
