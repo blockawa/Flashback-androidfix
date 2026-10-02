@@ -13,7 +13,6 @@
     "FinalBackbufferSampleMixin",
     "CustomImGuiImplGl3DelegateMixin",
     "ExportThumbnailTextureMixin",
-    "MousePosFixMixin",
     "SaveableFramebufferMixin",
     "SampleFormatGuardMixin"
   ],
