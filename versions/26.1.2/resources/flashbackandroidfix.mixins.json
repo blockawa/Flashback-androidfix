@@ -13,7 +13,9 @@
     "FinalBackbufferSampleMixin",
     "CustomImGuiImplGl3DelegateMixin",
     "ExportThumbnailTextureMixin",
-    "MousePosFixMixin"
+    "MousePosFixMixin",
+    "AudioCodecGuard26Mixin",
+    "SampleFormatGuard26Mixin"
   ],
   "injectors": {
     "defaultRequire": 1

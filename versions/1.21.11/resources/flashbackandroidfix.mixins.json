@@ -14,7 +14,9 @@
     "CustomImGuiImplGl3DelegateMixin",
     "ExportThumbnailTextureMixin",
     "MousePosFixMixin",
-    "SaveableFramebufferMixin"
+    "SaveableFramebufferMixin",
+    "AudioCodecGuardMixin",
+    "SampleFormatGuardMixin"
   ],
   "injectors": {
     "defaultRequire": 1

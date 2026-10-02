@@ -8,7 +8,9 @@
     "PreferencesWindowMixin",
     "ReplayUIMixin",
     "StartExportWindowMixin",
-    "VideoCodecMixin"
+    "VideoCodecMixin",
+    "AudioCodecGuard26Mixin",
+    "SampleFormatGuard26Mixin"
   ],
   "injectors": {
     "defaultRequire": 1
