@@ -15,7 +15,6 @@
     "ExportThumbnailTextureMixin",
     "MousePosFixMixin",
     "SaveableFramebufferMixin",
-    "AudioCodecGuardMixin",
     "SampleFormatGuardMixin"
   ],
   "injectors": {

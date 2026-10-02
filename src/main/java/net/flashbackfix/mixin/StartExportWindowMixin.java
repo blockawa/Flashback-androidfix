@@ -1,14 +1,17 @@
 package net.flashbackfix.mixin;
 
 import com.moulberry.flashback.Flashback;
+import com.moulberry.flashback.combo_options.AudioCodec;
 import com.moulberry.flashback.configuration.FlashbackConfigV1;
 import com.moulberry.flashback.editor.ui.windows.StartExportWindow;
 import com.moulberry.flashback.exporting.ExportSettings;
+import net.flashbackfix.ExportAudioGuard;
 import net.flashbackfix.ExportPathUtil;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -34,6 +37,9 @@ import java.util.concurrent.CompletableFuture;
  *
  * <p>The path field itself lives in the Preferences window ({@code PreferencesWindowMixin});
  * this mixin only keeps the folder seeding and replaces the native dialogs during export.
+ *
+ * <p>另包含修 A（导出音频编码兜底）的双版本注入点，见类底部
+ * {@code flashbackandroidfix$fallbackAudioCodec039} / {@code flashbackandroidfix$fallbackAudioCodec26}。
  */
 @Mixin(value = StartExportWindow.class, remap = false)
 public abstract class StartExportWindowMixin {
@@ -124,5 +130,28 @@ public abstract class StartExportWindowMixin {
             }
             return settings;
         }));
+    }
+
+    /**
+     * 修 A：导出音频编码兜底。{@code createExportSettings} 的音频分支只判录音开关，从不
+     * 校验 {@code config.internalExport.audioCodec} 是否被当前容器支持（视频有
+     * {@code !contains → codecs[0]} 兜底）——默认 AAC + webm 会原样进 {@code ExportSettings}，
+     * 最终在 {@code avformat_write_header} 处被拒（-22）崩溃。注入点是 lambda 内音频编码
+     * 局部变量落栈处（该处 AudioCodec STORE 唯一），值在录音开关判断前收敛到支持列表内，
+     * 逻辑与视频兜底同构；兜底实现见 {@link net.flashbackfix.ExportAudioGuard}。
+     *
+     * <p>两个注入点按 Flashback 版本分叉且互斥（字节码核对：0.39.10 的 createExportSettings
+     * 只有 {@code $2}、0.43.x 只有 {@code $0}），{@code require = 0} 让不存在的那半在本版本
+     * 静默跳过，每版本只命中自己那个。
+     */
+    @ModifyVariable(method = "lambda$createExportSettings$2", at = @At("STORE"), ordinal = 0, require = 0)
+    private static AudioCodec flashbackandroidfix$fallbackAudioCodec039(AudioCodec codec) {
+        return ExportAudioGuard.fallback(codec);
+    }
+
+    /** 修 A 的 0.43.x（26.x）注入点，与上面互斥，说明见上。 */
+    @ModifyVariable(method = "lambda$createExportSettings$0", at = @At("STORE"), ordinal = 0, require = 0)
+    private static AudioCodec flashbackandroidfix$fallbackAudioCodec26(AudioCodec codec) {
+        return ExportAudioGuard.fallback(codec);
     }
 }
