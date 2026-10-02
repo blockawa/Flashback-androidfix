@@ -5,6 +5,7 @@ import com.moulberry.flashback.combo_options.AudioCodec;
 import com.moulberry.flashback.combo_options.VideoCodec;
 import com.moulberry.flashback.combo_options.VideoContainer;
 import com.moulberry.flashback.configuration.FlashbackConfigV1;
+import com.moulberry.flashback.editor.ui.ImGuiHelper;
 import com.moulberry.flashback.editor.ui.windows.StartExportWindow;
 import com.moulberry.flashback.exporting.ExportSettings;
 import net.flashbackfix.ExportPathUtil;
@@ -183,6 +184,37 @@ public abstract class StartExportWindowMixin {
         String[] encoders = videoCodec.getEncoders();
         if (encoders.length <= 1) return encoders;
         return new String[]{encoders[0]};
+    }
+
+    /**
+     * 编码器信息合并显示：编码器下拉已由 {@code flashbackandroidfix$collapseEncoderDropdown}
+     * 移除，这里把编解码下拉的 label 追加为当前格式的探测首项硬编——H264 时显示
+     * {@code 编解码器 · h264_mediacodec}，切换格式后缀随之变化（H265 → hevc_mediacodec），
+     * 使被合并的编码器名在唯一的下拉上仍然可见。
+     *
+     * <p>仅当被包参数为 {@link VideoCodec}（编解码下拉）时追加后缀；同一方法内其余
+     * enumCombo 调用（容器 / 音频）原样转发。handler 内的 {@code getEncoders()} 调用
+     * 位于合成方法而非 renderVideoOptions，不受 collapse redirect 影响，拿到完整列表。
+     *
+     * <p>target 为泛型方法擦除签名 {@code (String, Enum, Enum[]) -> Enum}，已对 6 版本
+     * Flashback jar 逐一 javap 核对完全一致；26.x 另有的两参重载描述符不同，不会被拦。
+     */
+    @Redirect(
+        method = "renderVideoOptions",
+        at = @At(
+            value = "INVOKE",
+            target = "Lcom/moulberry/flashback/editor/ui/ImGuiHelper;enumCombo(Ljava/lang/String;Ljava/lang/Enum;[Ljava/lang/Enum;)Ljava/lang/Enum;"
+        )
+    )
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Enum flashbackandroidfix$showEncoderInCodecLabel(String label, Enum current, Enum[] values) {
+        if (current instanceof VideoCodec videoCodec) {
+            String[] encoders = videoCodec.getEncoders();
+            if (encoders.length > 0) {
+                label = label + " · " + encoders[0];
+            }
+        }
+        return ImGuiHelper.enumCombo(label, current, values);
     }
 
     /**
