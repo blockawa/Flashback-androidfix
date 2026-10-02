@@ -46,7 +46,6 @@ public class LoaderMixin {
     @Inject(method = "<clinit>", at = @At("HEAD"))
     private static void flashbackandroidfix$disableJavacppCache(CallbackInfo ci) {
         System.setProperty("org.bytedeco.javacpp.cacheLibraries", "false");
-        Flashback.LOGGER.warn("[flashback-androidfix] javacpp cacheLibraries disabled: no .javacpp directory will be created");
     }
 
     @Inject(
