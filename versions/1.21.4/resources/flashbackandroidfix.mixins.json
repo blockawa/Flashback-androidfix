@@ -13,7 +13,8 @@
     "FinalPresentMixin",
     "ReplayUIGuardMixin",
     "Gl3OffscreenMixin",
-    "JavacvNdkCodecMixin"
+    "JavacvNdkCodecMixin",
+    "ExportBlitSizeMixin"
   ],
   "injectors": {
     "defaultRequire": 1
