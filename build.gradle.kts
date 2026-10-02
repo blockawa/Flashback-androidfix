@@ -20,8 +20,9 @@ val flashbackDep = property("deps.flashback") as String
 val javaRelease = (property("java.release") as String).toInt()
 // 版本专属修复的 mixin 集中在 versions/<ver>/resources/flashbackandroidfix.mixins.json，
 // 构建时同名覆盖 src/main/resources 的共享版（后添加的 srcDir 胜出），26.2/26.3 无版本目录、
-// 直接用共享版。1.21.11 的版本版含 SaveableFramebufferMixin：26.x 走 blaze3d CommandEncoder
-// 下载帧数据而非原生 PBO，没有可修的 SaveableFramebuffer。
+// 直接用共享版。1.21.1/1.21.4/1.21.11 的版本版均含 SaveableFramebufferMixin（1.21.x 旧栈经
+// RenderTarget.bindWrite 绑帧缓冲、1.21.11 新栈经 GlTexture.getFbo，实现按各自渲染栈改写）；
+// 26.x 走 blaze3d CommandEncoder 下载帧数据而非原生 PBO，没有可修的 SaveableFramebuffer。
 val versionJavaDir = file("java")
 val versionResourcesDir = file("resources")
 val mainSourceSet = sourceSets["main"]
