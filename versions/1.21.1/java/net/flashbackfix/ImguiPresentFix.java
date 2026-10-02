@@ -9,7 +9,6 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.editor.ui.ReplayUI;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -125,22 +124,17 @@ public final class ImguiPresentFix {
         if (fbWidth <= 0 || fbHeight <= 0) {
             return;
         }
-        try {
-            if (offscreen == null || offscreen.width != fbWidth || offscreen.height != fbHeight) {
-                if (offscreen != null) {
-                    offscreen.destroyBuffers();
-                }
-                offscreen = new TextureTarget(fbWidth, fbHeight, false, false);
+        // 离屏创建失败直接向上抛出暴露问题——不做静默回退（回退机制已移除）
+        if (offscreen == null || offscreen.width != fbWidth || offscreen.height != fbHeight) {
+            if (offscreen != null) {
+                offscreen.destroyBuffers();
             }
-            frameRendered = true;
-        } catch (Throwable t) {
-            // 离屏创建失败时回退原路径：imgui 仍画 backbuffer，presentOverlay 跳过
-            offscreen = null;
-            Flashback.LOGGER.warn("[flashback-androidfix] create imgui offscreen target failed", t);
+            offscreen = new TextureTarget(fbWidth, fbHeight, false, false);
         }
+        frameRendered = true;
     }
 
-    /** Gl3OffscreenMixin redirect glBindFramebuffer(GL_FRAMEBUFFER, 0) 时读取；0 表示离屏未就绪，保持原行为。 */
+    /** Gl3OffscreenMixin redirect glBindFramebuffer(GL_FRAMEBUFFER, 0) 时读取；0 仅出现在窗口尺寸无效帧（离屏从未创建），按原指令绑 backbuffer。 */
     public static int offscreenFbo() {
         return offscreen != null ? offscreen.frameBufferId : 0;
     }
@@ -153,48 +147,44 @@ public final class ImguiPresentFix {
      * （MC 官方 blitShader 路径），仅补 imgui 需要的标准 alpha blend。
      */
     public static void presentOverlay() {
-        if (!frameRendered || !ReplayUI.isActive() || offscreen == null) {
+        if (!frameRendered || !ReplayUI.isActive()) {
             return;
         }
-        try {
-            RenderSystem.assertOnRenderThread();
-            Window window = Minecraft.getInstance().getWindow();
-            int[] fbWidth = new int[1];
-            int[] fbHeight = new int[1];
-            GLFW.glfwGetFramebufferSize(window.getWindow(), fbWidth, fbHeight);
-            if (fbWidth[0] <= 0 || fbHeight[0] <= 0) {
-                return;
-            }
-
-            GlStateManager._colorMask(true, true, true, false);
-            GlStateManager._disableDepthTest();
-            GlStateManager._depthMask(false);
-            GlStateManager._viewport(0, 0, fbWidth[0], fbHeight[0]);
-            GlStateManager._enableBlend();
-            GlStateManager._blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA,
-                    GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
-
-            Minecraft minecraft = Minecraft.getInstance();
-            ShaderInstance shaderInstance = Objects.requireNonNull(
-                    minecraft.gameRenderer.blitShader, "Blit shader not loaded");
-            shaderInstance.setSampler("DiffuseSampler", offscreen.getColorTextureId());
-            shaderInstance.apply();
-
-            BufferBuilder bufferBuilder = RenderSystem.renderThreadTesselator()
-                    .begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLIT_SCREEN);
-            bufferBuilder.addVertex(0.0f, 0.0f, 0.0f);
-            bufferBuilder.addVertex(1.0f, 0.0f, 0.0f);
-            bufferBuilder.addVertex(1.0f, 1.0f, 0.0f);
-            bufferBuilder.addVertex(0.0f, 1.0f, 0.0f);
-            BufferUploader.draw(bufferBuilder.buildOrThrow());
-            shaderInstance.clear();
-
-            GlStateManager._disableBlend();
-            GlStateManager._depthMask(true);
-            GlStateManager._colorMask(true, true, true, true);
-            GlStateManager._enableDepthTest();
-        } catch (Throwable t) {
-            Flashback.LOGGER.warn("[flashback-androidfix] imgui overlay present failed", t);
+        RenderSystem.assertOnRenderThread();
+        Window window = Minecraft.getInstance().getWindow();
+        int[] fbWidth = new int[1];
+        int[] fbHeight = new int[1];
+        GLFW.glfwGetFramebufferSize(window.getWindow(), fbWidth, fbHeight);
+        if (fbWidth[0] <= 0 || fbHeight[0] <= 0) {
+            return;
         }
+
+        GlStateManager._colorMask(true, true, true, false);
+        GlStateManager._disableDepthTest();
+        GlStateManager._depthMask(false);
+        GlStateManager._viewport(0, 0, fbWidth[0], fbHeight[0]);
+        GlStateManager._enableBlend();
+        GlStateManager._blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA,
+                GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+        Minecraft minecraft = Minecraft.getInstance();
+        ShaderInstance shaderInstance = Objects.requireNonNull(
+                minecraft.gameRenderer.blitShader, "Blit shader not loaded");
+        shaderInstance.setSampler("DiffuseSampler", offscreen.getColorTextureId());
+        shaderInstance.apply();
+
+        BufferBuilder bufferBuilder = RenderSystem.renderThreadTesselator()
+                .begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLIT_SCREEN);
+        bufferBuilder.addVertex(0.0f, 0.0f, 0.0f);
+        bufferBuilder.addVertex(1.0f, 0.0f, 0.0f);
+        bufferBuilder.addVertex(1.0f, 1.0f, 0.0f);
+        bufferBuilder.addVertex(0.0f, 1.0f, 0.0f);
+        BufferUploader.draw(bufferBuilder.buildOrThrow());
+        shaderInstance.clear();
+
+        GlStateManager._disableBlend();
+        GlStateManager._depthMask(true);
+        GlStateManager._colorMask(true, true, true, true);
+        GlStateManager._enableDepthTest();
     }
 }
