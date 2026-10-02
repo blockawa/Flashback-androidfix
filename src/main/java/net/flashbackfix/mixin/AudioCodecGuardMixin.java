@@ -4,6 +4,7 @@ import com.moulberry.flashback.combo_options.AudioCodec;
 import com.moulberry.flashback.editor.ui.windows.StartExportWindow;
 import net.flashbackfix.ExportAudioGuard;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
@@ -21,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 @Mixin(value = StartExportWindow.class, remap = false)
 public abstract class AudioCodecGuardMixin {
 
-    @ModifyVariable(method = "lambda$createExportSettings$2", ordinal = 0)
+    @ModifyVariable(method = "lambda$createExportSettings$2", at = @At("STORE"), ordinal = 0)
     private static AudioCodec flashbackandroidfix$fallbackAudioCodec(AudioCodec codec) {
         return ExportAudioGuard.fallback(codec);
     }
