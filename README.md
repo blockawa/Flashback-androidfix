@@ -1,6 +1,6 @@
 # Flashback Android Fix
 
-A Fabric client mod for Android that lets [Flashback](https://modrinth.com/mod/flashback) record and export properly on Android.
+An Android fix mod for [Flashback](https://modrinth.com/mod/flashback) that lets it record and export properly on Android.
 
 ## Features
 
@@ -31,7 +31,7 @@ The build is based on [Stonecutter](https://codeberg.org/stonecutter/stonecutter
 
 ## 中文
 
-面向 Android 的 Fabric 客户端 mod，让 [Flashback](https://modrinth.com/mod/flashback) 能在安卓上正常录制和导出。
+面向 [Flashback](https://modrinth.com/mod/flashback) 的安卓修复 mod 能在安卓上正常录制和导出。
 
 ### 功能
 
