@@ -2,6 +2,7 @@ package net.flashbackfix.mixin;
 
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.combo_options.AudioCodec;
+import com.moulberry.flashback.combo_options.VideoCodec;
 import com.moulberry.flashback.combo_options.VideoContainer;
 import com.moulberry.flashback.configuration.FlashbackConfigV1;
 import com.moulberry.flashback.editor.ui.windows.StartExportWindow;
@@ -39,7 +40,9 @@ import java.util.concurrent.CompletableFuture;
  * this mixin only keeps the folder seeding and replaces the native dialogs during export.
  *
  * <p>另包含修 A（导出音频编码兜底）的双版本注入点，见类底部
- * {@code flashbackandroidfix$fallbackAudioCodec039} / {@code flashbackandroidfix$fallbackAudioCodec26}。
+ * {@code flashbackandroidfix$fallbackAudioCodec039} / {@code flashbackandroidfix$fallbackAudioCodec26}；
+ * 以及编码器下拉合并（只留编解码一个下拉），见
+ * {@code flashbackandroidfix$collapseEncoderDropdown}。
  */
 @Mixin(value = StartExportWindow.class, remap = false)
 public abstract class StartExportWindowMixin {
@@ -153,6 +156,33 @@ public abstract class StartExportWindowMixin {
     @ModifyVariable(method = "lambda$createExportSettings$0", at = @At("STORE"), ordinal = 0, require = 0)
     private static AudioCodec flashbackandroidfix$fallbackAudioCodec26(AudioCodec codec) {
         return flashbackandroidfix$convergeAudioCodec(codec);
+    }
+
+    /**
+     * 合并编码器下拉：把 {@code renderVideoOptions} 内 UI 用的 {@code videoCodec.getEncoders()}
+     * 调用（该方法内唯一一处，ordinal 0）重定向为只含探测首项（各格式的 mediacodec 硬编，
+     * H264 即 h264_mediacodec）的单元素数组，使原逻辑 {@code encoders.length > 1} 永假、
+     * Encoder（编码器）下拉不再渲染——导出窗口只留编解码一个下拉。
+     *
+     * <p>编码路径零影响：{@code createExportSettings} 取编码器与 {@code getSelectedEncoderForCodec}
+     * 都在本方法之外调用 {@code getEncoders()}，拿到的仍是完整列表；{@code selectedVideoEncoder}
+     * 保持原值不动——未手动选过时即默认（空 / 索引 0），编码自然落到首项硬编。
+     *
+     * <p>六版本（1.21.1 / 1.21.4 / 1.21.11 / 26.1.2 / 26.2 / 26.3）方法边界已逐一核对：
+     * 下拉调用均在 {@code renderVideoOptions} 内且各仅此一处，签名一致。
+     */
+    @Redirect(
+        method = "renderVideoOptions",
+        at = @At(
+            value = "INVOKE",
+            target = "Lcom/moulberry/flashback/combo_options/VideoCodec;getEncoders()[Ljava/lang/String;",
+            ordinal = 0
+        )
+    )
+    private static String[] flashbackandroidfix$collapseEncoderDropdown(VideoCodec videoCodec) {
+        String[] encoders = videoCodec.getEncoders();
+        if (encoders.length <= 1) return encoders;
+        return new String[]{encoders[0]};
     }
 
     /**
