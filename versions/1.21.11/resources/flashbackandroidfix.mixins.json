@@ -14,7 +14,6 @@
     "ExportThumbnailTextureMixin",
     "MousePosFixMixin",
     "SaveableFramebufferMixin",
-    "SampleFormatGuardMixin",
     "JavacvNdkCodecMixin"
   ],
   "injectors": {

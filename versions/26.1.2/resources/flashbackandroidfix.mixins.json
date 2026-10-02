@@ -13,7 +13,6 @@
     "CustomImGuiImplGl3DelegateMixin",
     "ExportThumbnailTextureMixin",
     "MousePosFixMixin",
-    "SampleFormatGuardMixin",
     "FlashbackFFmpegNdkCodecMixin"
   ],
   "injectors": {
