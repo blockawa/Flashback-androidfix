@@ -10,7 +10,10 @@
     "StartExportWindowMixin",
     "VideoCodecMixin",
     "SampleFormatGuardMixin",
-    "SaveableFramebufferMixin"
+    "SaveableFramebufferMixin",
+    "FinalPresentMixin",
+    "ReplayUIGuardMixin",
+    "Gl3OffscreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1
