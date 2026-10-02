@@ -26,7 +26,7 @@ public abstract class SampleFormatGuardMixin {
     /** 0.39.10（1.21.11）：构造器里的 javacv recorder。 */
     @Redirect(method = "<init>", at = @At(
             value = "INVOKE",
-            target = "Lorg/bytedeco/javacv/FFmpegFrameRecorder;setSampleFormat:(I)V"
+            target = "Lorg/bytedeco/javacv/FFmpegFrameRecorder;setSampleFormat(I)V"
     ), require = 0)
     private static int flashbackandroidfix$autoSampleFormat039(int sampleFormat) {
         return -1; // AV_SAMPLE_FMT_NONE：交给 recorder 按 sample_fmts() 自选
@@ -35,7 +35,7 @@ public abstract class SampleFormatGuardMixin {
     /** 0.43.x（26.x）：tryStart 里的 fork recorder。 */
     @Redirect(method = "tryStart(I)V", at = @At(
             value = "INVOKE",
-            target = "Lcom/moulberry/flashback/exporting/FlashbackFFmpegFrameRecorder;setSampleFormat:(I)V"
+            target = "Lcom/moulberry/flashback/exporting/FlashbackFFmpegFrameRecorder;setSampleFormat(I)V"
     ), require = 0)
     private static int flashbackandroidfix$autoSampleFormat26(int sampleFormat) {
         return -1; // AV_SAMPLE_FMT_NONE：交给 recorder 按 sample_fmts() 自选
