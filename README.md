@@ -1,6 +1,6 @@
 # Flashback Android Fix
 
-An Android fix mod for [Flashback](https://modrinth.com/mod/flashback) that lets it record and export properly on Android.
+An Android fix mod for [Flashback](https://modrinth.com/mod/flashback) that lets it launch, record, and export properly on Android.
 
 ## Features
 
@@ -31,7 +31,7 @@ The build is based on [Stonecutter](https://codeberg.org/stonecutter/stonecutter
 
 ## 中文
 
-面向 [Flashback](https://modrinth.com/mod/flashback) 的安卓修复 mod 能在安卓上正常录制和导出。
+面向 [Flashback](https://modrinth.com/mod/flashback) 的安卓修复 mod 能在安卓上正常启动、录制和导出。
 
 ### 功能
 
