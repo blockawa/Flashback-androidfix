@@ -9,6 +9,27 @@ mc.targets = "[VERSIONED]"
 ffmpeg_natives = "8.1.2-1.5.14"
 javacpp_natives = "1.5.14"
 
+# 1.21.1 / 1.21.4 与 1.21.11 同属 Flashback 0.39.x 时代（Modrinth latest 均为 0.39.10，
+# javacv 绑定 ffmpeg 6.1.1-1.5.10、javacpp 1.5.10，manifest 已核对），mixin target 与
+# 1.21.11 的 jar 逐个 javap 比对全命中，故与 1.21.11 共用同一套 natives/loader/java 配置。
+["1.21.1"]
+mc.version = "1.21.1"
+mc.targets = "1.21.1"
+deps.fabric_loader = "0.15.10"
+deps.flashback = ">=0.39.10"
+java.release = 21
+ffmpeg_natives = "6.1.1-1.5.10"
+javacpp_natives = "1.5.10"
+
+["1.21.4"]
+mc.version = "1.21.4"
+mc.targets = "1.21.4"
+deps.fabric_loader = "0.15.10"
+deps.flashback = ">=0.39.10"
+java.release = 21
+ffmpeg_natives = "6.1.1-1.5.10"
+javacpp_natives = "1.5.10"
+
 ["1.21.11"]
 mc.version = "1.21.11"
 mc.targets = "1.21.11"
