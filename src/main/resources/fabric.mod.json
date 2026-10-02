@@ -4,7 +4,7 @@
   "version": "${version}",
   "name": "Flashback Android Fix",
   "description": "Exports straight to a folder inside the game directory instead of opening the native file dialog, which hangs on Android.",
-  "icon": "icon.png",
+  "icon": "assets/flashbackandroidfix/icon.png",
   "authors": [
     "Flashback Android Fix"
   ],
