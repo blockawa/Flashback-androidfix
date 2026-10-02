@@ -18,10 +18,10 @@ val mcTargets = sc.properties["mc.targets"] as String
 val loaderVersion = property("deps.fabric_loader") as String
 val flashbackDep = property("deps.flashback") as String
 val javaRelease = (property("java.release") as String).toInt()
-// 开关按"版本 resources 目录里是否存在该 json"判定（文件即开关，26.2/26.3 无版本目录自动关闭）。
-// 1.21.11 的 imgui json 兼并了 SaveableFramebufferMixin：26.x 走 blaze3d CommandEncoder
+// 版本专属修复的 mixin 集中在 versions/<ver>/resources/flashbackandroidfix.mixins.json，
+// 构建时同名覆盖 src/main/resources 的共享版（后添加的 srcDir 胜出），26.2/26.3 无版本目录、
+// 直接用共享版。1.21.11 的版本版含 SaveableFramebufferMixin：26.x 走 blaze3d CommandEncoder
 // 下载帧数据而非原生 PBO，没有可修的 SaveableFramebuffer。
-val imguiFixEnabled = file("resources/flashbackandroidfix-imgui.mixins.json").isFile
 val versionJavaDir = file("java")
 val versionResourcesDir = file("resources")
 val mainSourceSet = sourceSets["main"]
@@ -31,9 +31,6 @@ if (versionJavaDir.isDirectory) {
 }
 if (versionResourcesDir.isDirectory) {
     mainSourceSet.resources.srcDir(versionResourcesDir)
-}
-if (imguiFixEnabled) {
-    require(versionJavaDir.isDirectory) { "imgui mixins json present but java sources missing in $projectDir" }
 }
 
 val accessWidenerFile = versionResourcesDir.resolve("flashbackandroidfix.accesswidener")
@@ -164,7 +161,6 @@ tasks.processResources {
             "fabric_loader" to loaderVersion,
             "java" to javaRelease,
             "flashback" to flashbackDep,
-            "imgui_mixins_extra" to (if (imguiFixEnabled) ", \"flashbackandroidfix-imgui.mixins.json\"" else ""),
             "access_widener" to (if (accessWidenerEnabled) "\"accessWidener\": \"flashbackandroidfix.accesswidener\"," else "")
         )
     }

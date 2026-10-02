@@ -3,11 +3,17 @@
   "package": "net.flashbackfix.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "ExportScreenshotWindowMixin",
+    "LoaderMixin",
+    "PreferencesWindowMixin",
+    "ReplayUIMixin",
+    "StartExportWindowMixin",
+    "VideoCodecMixin",
     "ReplayUIGuardMixin",
     "FinalBackbufferSampleMixin",
     "CustomImGuiImplGl3DelegateMixin",
     "ExportThumbnailTextureMixin",
-    "InputDebugMixin",
+    "MousePosFixMixin",
     "SaveableFramebufferMixin"
   ],
   "injectors": {

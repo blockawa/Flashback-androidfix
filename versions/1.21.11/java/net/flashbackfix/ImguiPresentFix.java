@@ -6,8 +6,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.editor.ui.ReplayUI;
-import com.moulberry.flashback.exporting.AsyncFileDialogs;
-import imgui.moulberry90.ImGuiIO;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 
@@ -17,104 +15,7 @@ public final class ImguiPresentFix {
     private static RenderTarget compositeScreen;
     private static boolean pendingResize;
 
-    /** Bug 1 诊断开关：输入失灵定位完成后，连同相关日志一起删除。 */
-    public static final boolean INPUT_DEBUG = true;
-
-    private static String lastInputState = "";
-    private static long lastInputLogTime;
-
     private ImguiPresentFix() {
-    }
-
-    /**
-     * 供 InputDebugMixin 在输入事件日志里附带当前的门状态（上一帧快照）。
-     */
-    public static String inputStateSummary() {
-        return lastInputState;
-    }
-
-    public static void logInput(String message) {
-        if (INPUT_DEBUG) {
-            Flashback.LOGGER.info("[flashback-androidfix][input] {}", message);
-        }
-    }
-
-    /** Bug 1 诊断：updateMousePosAndButtons 处理前的原始鼠标状态（HEAD 记录）。 */
-    private static float recRawMouseX;
-    private static float recRawMouseY;
-    private static boolean recFocused;
-    private static boolean recMouseOnWin;
-    private static int recCursorMode;
-    /** 本帧 MousePos 修复是否触发（TAIL 记录）。 */
-    private static boolean recRepaired;
-
-    public static void recordMouseState(float rawX, float rawY, boolean focused,
-                                        boolean mouseOnWin, int cursorMode) {
-        if (!INPUT_DEBUG) {
-            return;
-        }
-        recRawMouseX = rawX;
-        recRawMouseY = rawY;
-        recFocused = focused;
-        recMouseOnWin = mouseOnWin;
-        recCursorMode = cursorMode;
-    }
-
-    public static void recordRepaired(boolean repaired) {
-        if (!INPUT_DEBUG) {
-            return;
-        }
-        recRepaired = repaired;
-    }
-
-    /**
-     * Bug 1 诊断：每帧快照输入链路的各道门（isActive/hasDialog/grabbed/
-     * handledBy/wantCapture*）。离散状态变化时立刻打一条，否则每 10 秒
-     * 打一条心跳（附鼠标坐标）证明渲染循环与日志链路活着。
-     */
-    private static void snapshotInputState() {
-        if (!INPUT_DEBUG) {
-            return;
-        }
-        try {
-            // 注意：isActive=false 时不读 ImGuiIO（getIO() 在未初始化时会触发
-            // ReplayUI.init()，而 LoadingOverlay 期间 drawOverlay 会早退不 init，
-            // 不能替它做）。getMouseHandledBy() 在 !isActive 时短路返回 GAME，
-            // 不会触到 IO，安全。isActive=true 时 init 必然已完成。
-            boolean active = ReplayUI.isActive();
-            StringBuilder state = new StringBuilder()
-                    .append("active=").append(active)
-                    .append(" hasDialog=").append(AsyncFileDialogs.hasDialog())
-                    .append(" grabbed=").append(ReplayUI.imguiGlfw.isGrabbed())
-                    .append(" handledBy=").append(ReplayUI.imguiGlfw.getMouseHandledBy());
-            float mouseX = 0;
-            float mouseY = 0;
-            if (active) {
-                ImGuiIO io = ReplayUI.getIO();
-                state.append(" wantMouse=").append(io.getWantCaptureMouse())
-                        .append(" wantKey=").append(io.getWantCaptureKeyboard())
-                        .append(" wantText=").append(io.getWantTextInput());
-                mouseX = io.getMousePosX();
-                mouseY = io.getMousePosY();
-            }
-            state.append(" rawValid=").append(recRawMouseX > -1.0E30f)
-                    .append(" mouseOnWin=").append(recMouseOnWin)
-                    .append(" focused=").append(recFocused)
-                    .append(" cursorMode=").append(recCursorMode)
-                    .append(" fixed=").append(recRepaired);
-            long now = System.currentTimeMillis();
-            if (!state.toString().equals(lastInputState)) {
-                lastInputState = state.toString();
-                lastInputLogTime = now;
-                Flashback.LOGGER.info("[flashback-androidfix][input] state {}", lastInputState);
-            } else if (now - lastInputLogTime >= 10_000) {
-                lastInputLogTime = now;
-                Flashback.LOGGER.info("[flashback-androidfix][input] heartbeat {} mouse=({},{}) rawMouse=({},{})",
-                        lastInputState, mouseX, mouseY, recRawMouseX, recRawMouseY);
-            }
-        } catch (Throwable t) {
-            Flashback.LOGGER.error("[flashback-androidfix][input] snapshot failed", t);
-        }
     }
 
     /**
@@ -176,7 +77,6 @@ public final class ImguiPresentFix {
             ReplayUI.imguiGlfw.ungrab();
         }
         ReplayUI.drawOverlay();
-        snapshotInputState();
     }
 
     /**
