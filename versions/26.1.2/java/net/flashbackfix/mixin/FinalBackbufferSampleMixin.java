@@ -19,9 +19,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * blitToScreen can run reliably. renderFrame's own injection points cannot
  * be cancelled that way.
  *
- * BEFORE blitToScreen: reset the per-frame claim and draw the imgui overlay
- * into its offscreen B3D target (Flashback's afterMainBlit drawOverlay,
- * which fires AFTER the invoke, is dropped by the claimDraw guard).
+ * BEFORE blitToScreen: reset the per-frame claim and run drawOverlay so the
+ * original GL3 backend renders the imgui overlay into this mod's offscreen
+ * target (Flashback's afterMainBlit drawOverlay, which fires AFTER the
+ * invoke, is dropped by the claimDraw guard).
  *
  * AFTER blitToScreen: whatever blitToScreen managed to present (Flashback's
  * partial game present or the vanilla present) is overwritten here with the

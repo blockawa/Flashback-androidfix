@@ -2,17 +2,26 @@ package net.flashbackfix;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.Window;
+import com.mojang.blaze3d.opengl.GlDevice;
+import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.editor.ui.ReplayUI;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
 
 public final class ImguiPresentFix {
 
     private static boolean drawnThisFrame;
     private static RenderTarget compositeScreen;
+    /** 原版 GL3 后端的离屏绘制目标：renderDrawData 画进来，AFTER hook 合成上屏。 */
+    private static RenderTarget overlayScreen;
+    /** 本帧 renderDrawData 是否真正执行过（与原版早退条件一致）。 */
+    private static boolean overlayRendered;
     private static boolean pendingResize;
 
     private ImguiPresentFix() {
@@ -59,24 +68,58 @@ public final class ImguiPresentFix {
     }
 
     /**
+     * 返回 GL3 后端应写入的离屏 FBO。取法与 Flashback SaveableFramebuffer
+     * 一致：新栈 GlTexture 暴露的 getFbo 即其底层 GL 帧缓冲。
+     * 离屏尚未创建时返回 0（防御：维持原行为而不是抛 NPE）。
+     */
+    public static int overlayFbo() {
+        if (overlayScreen == null) {
+            return 0;
+        }
+        GpuTexture texture = overlayScreen.getColorTexture();
+        return ((GlTexture) texture).getFbo(
+                ((GlDevice) RenderSystem.getDevice()).directStateAccess(), null);
+    }
+
+    /**
+     * CustomImGuiImplGl3DelegateMixin 在 renderDrawData 入口（通过原版早退条件后）调用：
+     * 按 imgui 帧缓冲尺寸准备离屏 RT（resize + 清成全透明）并绑定，
+     * 同时置"本帧已渲染"标志。后续原版 setupRenderState 的绑 0 会被
+     * redirect 回这里绑定的离屏 FBO。
+     */
+    public static void prepareOverlay(int fbWidth, int fbHeight) {
+        overlayScreen = FixFramebuffers.resizeOrCreate(overlayScreen, fbWidth, fbHeight);
+        FixFramebuffers.clear(overlayScreen, 0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, overlayFbo());
+        overlayRendered = true;
+    }
+
+    /**
      * Runs at Minecraft.runTick immediately before the
      * mainRenderTarget.blitToScreen() call: claims this frame's single
-     * drawOverlay call and lets the B3D renderer produce the offscreen
-     * imgui target. Flashback's afterMainBlit drawOverlay fires after the
-     * invoke and is dropped by the claimDraw guard.
+     * drawOverlay call. The original GL3 backend renders the overlay into the
+     * offscreen {@link #overlayScreen} (prepared at renderDrawData entry).
+     * Flashback's afterMainBlit drawOverlay fires after the invoke and is
+     * dropped by the claimDraw guard.
      */
     public static void drawBeforePresent(RenderTarget renderTarget) {
         resetFrame();
+        overlayRendered = false;
         if (!RenderSystem.isOnRenderThread()) {
             return;
         }
-        ImGuiB3DRenderer.lastComposite = null;
         if (ReplayUI.isActive() && ReplayUI.imguiGlfw.isGrabbed()
                 && GLFW.glfwGetMouseButton(Minecraft.getInstance().getWindow().handle(),
                         GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_RELEASE) {
             ReplayUI.imguiGlfw.ungrab();
         }
-        ReplayUI.drawOverlay();
+        // 绘制全程把传统 GL 的 FBO 绑定圈在 drawOverlay 内，结束后恢复原绑定
+        int oldFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        try {
+            ReplayUI.drawOverlay();
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, oldFbo);
+        }
     }
 
     /**
@@ -88,10 +131,10 @@ public final class ImguiPresentFix {
         if (self != Minecraft.getInstance().getMainRenderTarget()) {
             return null;
         }
-        if (!ReplayUI.isActive()) {
+        if (!ReplayUI.isActive() || !overlayRendered) {
             return null;
         }
-        RenderTarget overlay = ImGuiB3DRenderer.lastComposite;
+        RenderTarget overlay = overlayScreen;
         if (overlay == null || overlay.getColorTextureView() == null) {
             return null;
         }
