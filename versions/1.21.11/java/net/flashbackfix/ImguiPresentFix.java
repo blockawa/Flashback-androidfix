@@ -43,6 +43,15 @@ public final class ImguiPresentFix {
         if (window.getWidth() > 0 && window.getWidth() <= 16384
                 && window.getHeight() > 0 && window.getHeight() <= 16384) {
             minecraft.resizeDisplay();
+            // 主 RT 重建后纹理内容未初始化（Android 显存残留呈灰）：进回放头几帧、
+            // 游戏首帧 clear/renderLevel 之前，buildComposite 的 blitCrop 会把这块脏灰
+            // 搬进回放预览窗口（"Main" 窗口 NoBackground 直接透出下方 blitCrop），呈现
+            // 一瞬灰。立即清成黑（0 的 RGB 分量全 0，与 clear 的颜色打包格式无关），
+            // 空窗期显示黑——正常加载观感——直到游戏首帧渲染覆盖。
+            RenderTarget mainTarget = minecraft.getMainRenderTarget();
+            if (mainTarget != null) {
+                FixFramebuffers.clear(mainTarget, 0);
+            }
         }
     }
 

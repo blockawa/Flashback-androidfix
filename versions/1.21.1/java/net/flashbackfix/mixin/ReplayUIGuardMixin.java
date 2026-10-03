@@ -4,6 +4,7 @@ import com.moulberry.flashback.editor.ui.ReplayUI;
 import net.flashbackfix.ImguiPresentFix;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -28,12 +29,37 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * target 在运行时匹配不到、注入失败并崩溃。
  */
 @Mixin(ReplayUI.class)
-public class ReplayUIGuardMixin {
+public abstract class ReplayUIGuardMixin {
+
+    @Shadow
+    private static boolean isActiveInternal();
+
+    @Shadow
+    private static void transitionActiveState(boolean active);
 
     @Inject(method = "drawOverlay()V", at = @At("HEAD"), cancellable = true)
     private static void flashbackandroidfix$skipDuplicate(CallbackInfo ci) {
         if (!ImguiPresentFix.claimDraw()) {
             ci.cancel();
+        }
+    }
+
+    /**
+     * 导出关闭态的抢先转移：点导出后 {@code isActiveInternal()} 立即翻 false，但原生
+     * 要到 drawOverlay 中段的 {@code !isActiveInternal()} 分支才执行 transitionActiveState(false)；
+     * 若当帧 screen 是 ProgressScreen / ReceivingLevelScreen（ExportJob 启动 seek 时 MC 会弹
+     * 地形屏约 1-2 秒），drawOverlay 在更早的 screen 判断处就提前 return——状态机整个被截断：
+     * activeLastFrame 保持 true，MixinRenderTarget 继续接管 blit（游戏只进视口矩形，呈左下角
+     * 小窗），imgui 不画，视口外 backbuffer 无写入，Android 下 swap 残留不可靠即整屏黑。
+     *
+     * <p>这里在 HEAD 抢先完成转移，当帧 {@code isActive()} 即为 false，原版 blit 按窗口尺寸
+     * 铺满，黑窗口不再出现。transitionActiveState 对同值调用直接 return（幂等），正常编辑器帧
+     * {@code isActiveInternal()} 为 true 不触发；被 claimDraw cancel 的重复调用帧即使执行也幂等。
+     */
+    @Inject(method = "drawOverlay()V", at = @At("HEAD"))
+    private static void flashbackandroidfix$earlyCloseTransition(CallbackInfo ci) {
+        if (!isActiveInternal()) {
+            transitionActiveState(false);
         }
     }
 
