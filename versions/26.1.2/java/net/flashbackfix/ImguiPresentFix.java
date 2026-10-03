@@ -302,6 +302,7 @@ public final class ImguiPresentFix {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
             java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
             int nonZero = 0;
+            int rgbLit = 0;
             int sampled = 0;
             // 8 条横带、每带 64 点：覆盖全屏高度分布，避免只采到空白区
             for (int band = 0; band < 8; band++) {
@@ -314,10 +315,13 @@ public final class ImguiPresentFix {
                     if (px.get(3) != 0) {
                         nonZero++;
                     }
+                    if ((px.get(0) & 0xFF) != 0 || (px.get(1) & 0xFF) != 0 || (px.get(2) & 0xFF) != 0) {
+                        rgbLit++;
+                    }
                 }
             }
-            Flashback.LOGGER.info("[flashback-androidfix] overlay readback: {}/{} non-transparent samples",
-                    nonZero, sampled);
+            Flashback.LOGGER.info("[flashback-androidfix] overlay readback: {}/{} non-transparent, {}/{} rgb-lit",
+                    nonZero, sampled, rgbLit, sampled);
         } catch (Throwable t) {
             Flashback.LOGGER.warn("[flashback-androidfix] overlay readback failed: {}", t.toString());
         } finally {
@@ -360,6 +364,7 @@ public final class ImguiPresentFix {
             java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
             int nonZero = 0;
             int opaque = 0;
+            int rgbLit = 0;
             int sampled = 0;
             for (int band = 0; band < 8; band++) {
                 int y = h * (band * 2 + 1) / 16;
@@ -375,10 +380,13 @@ public final class ImguiPresentFix {
                     if (a >= 200) {
                         opaque++;
                     }
+                    if ((px.get(0) & 0xFF) != 0 || (px.get(1) & 0xFF) != 0 || (px.get(2) & 0xFF) != 0) {
+                        rgbLit++;
+                    }
                 }
             }
-            Flashback.LOGGER.info("[flashback-androidfix] composite readback: {}/{} non-transparent, {}/{} opaque",
-                    nonZero, sampled, opaque, sampled);
+            Flashback.LOGGER.info("[flashback-androidfix] composite readback: {}/{} non-transparent, {}/{} opaque, {}/{} rgb-lit",
+                    nonZero, sampled, opaque, sampled, rgbLit, sampled);
         } catch (Throwable t) {
             Flashback.LOGGER.warn("[flashback-androidfix] composite readback failed: {}", t.toString());
         } finally {
@@ -407,6 +415,7 @@ public final class ImguiPresentFix {
             java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
             int nonZero = 0;
             int opaque = 0;
+            int rgbLit = 0;
             int sampled = 0;
             for (int band = 0; band < 8; band++) {
                 int y = h * (band * 2 + 1) / 16;
@@ -422,10 +431,13 @@ public final class ImguiPresentFix {
                     if (a >= 200) {
                         opaque++;
                     }
+                    if ((px.get(0) & 0xFF) != 0 || (px.get(1) & 0xFF) != 0 || (px.get(2) & 0xFF) != 0) {
+                        rgbLit++;
+                    }
                 }
             }
-            Flashback.LOGGER.info("[flashback-androidfix] screen readback: {}/{} non-transparent, {}/{} opaque",
-                    nonZero, sampled, opaque, sampled);
+            Flashback.LOGGER.info("[flashback-androidfix] screen readback: {}/{} non-transparent, {}/{} opaque, {}/{} rgb-lit",
+                    nonZero, sampled, opaque, sampled, rgbLit, sampled);
         } catch (Throwable t) {
             Flashback.LOGGER.warn("[flashback-androidfix] screen readback failed: {}", t.toString());
         } finally {
