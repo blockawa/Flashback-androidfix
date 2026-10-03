@@ -2,43 +2,17 @@ package net.flashbackfix;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.Window;
-import com.mojang.blaze3d.opengl.GlDevice;
-import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.editor.ui.ReplayUI;
-import imgui.moulberry90.ImDrawData;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL30;
 
 public final class ImguiPresentFix {
 
     private static boolean drawnThisFrame;
     private static RenderTarget compositeScreen;
-    /** 原版 GL3 后端的离屏绘制目标：renderDrawData 画进来，AFTER hook 合成上屏。 */
-    private static RenderTarget overlayScreen;
-    /** 本帧 renderDrawData 是否真正执行过（与原版早退条件一致）。 */
-    private static boolean overlayRendered;
-    /** 诊断日志节流：各点位独立 5 秒窗口，防止黑屏时每帧刷日志。 */
-    private static long lastDrawLogMs;
-    private static long lastPrepLogMs;
-    private static long lastCompLogMs;
-    private static long lastEmptyLogMs;
-    /** 读回诊断节流：10 秒一次（glReadPixels 有同步开销）。 */
-    private static long lastReadLogMs;
-    /** prepareOverlay 记录的本帧离屏尺寸：读回诊断用，规避 RenderTarget 尺寸 API 的版本差异。 */
-    private static int overlayW;
-    private static int overlayH;
-    /** composite 读回诊断节流：10 秒一次（与 overlay 读回独立计时）。 */
-    private static long lastCompReadLogMs;
-    /** 屏幕（FBO 0）读回诊断节流：10 秒一次，验证 presentTexture 的 blit 是否真的到达 backbuffer。 */
-    private static long lastScreenReadLogMs;
-    /** 字体纹理读回诊断节流：10 秒一次，区分"纹理上传坏"与"采样/顶点属性坏"。 */
-    private static long lastFontReadLogMs;
     private static boolean pendingResize;
 
     private ImguiPresentFix() {
@@ -85,82 +59,24 @@ public final class ImguiPresentFix {
     }
 
     /**
-     * 返回 GL3 后端应写入的离屏 FBO。取法与 Flashback SaveableFramebuffer
-     * 一致：新栈 GlTexture 暴露的 getFbo 即其底层 GL 帧缓冲。
-     * 离屏尚未创建时返回 0（防御：维持原行为而不是抛 NPE）。
-     */
-    public static int overlayFbo() {
-        if (overlayScreen == null) {
-            return 0;
-        }
-        GpuTexture texture = overlayScreen.getColorTexture();
-        return ((GlTexture) texture).getFbo(
-                ((GlDevice) RenderSystem.getDevice()).directStateAccess(), null);
-    }
-
-    /**
-     * CustomImGuiImplGl3DelegateMixin 在 renderDrawData 入口（通过原版早退条件后）调用：
-     * 按 imgui 帧缓冲尺寸准备离屏 RT（resize + 清成全透明）并绑定，
-     * 同时置"本帧已渲染"标志。后续原版 setupRenderState 的绑 0 会被
-     * redirect 回这里绑定的离屏 FBO。
-     */
-    public static void prepareOverlay(int fbWidth, int fbHeight) {
-        overlayScreen = FixFramebuffers.resizeOrCreate(overlayScreen, fbWidth, fbHeight);
-        FixFramebuffers.clear(overlayScreen, 0);
-        int fbo = overlayFbo();
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
-        overlayRendered = true;
-        overlayW = fbWidth;
-        overlayH = fbHeight;
-        // 诊断：renderDrawData 真正执行且通过原版早退条件的证据（绘制链第一环）
-        long now = System.currentTimeMillis();
-        if (now - lastPrepLogMs > 5000) {
-            lastPrepLogMs = now;
-            Flashback.LOGGER.info("[flashback-androidfix] overlay prepared {}x{} fbo={}", fbWidth, fbHeight, fbo);
-        }
-    }
-
-    /**
      * Runs at Minecraft.runTick immediately before the
      * mainRenderTarget.blitToScreen() call: claims this frame's single
-     * drawOverlay call. The original GL3 backend renders the overlay into the
-     * offscreen {@link #overlayScreen} (prepared at renderDrawData entry).
-     * Flashback's afterMainBlit drawOverlay fires after the invoke and is
-     * dropped by the claimDraw guard.
+     * drawOverlay call and lets the B3D renderer produce the offscreen
+     * imgui target. Flashback's afterMainBlit drawOverlay fires after the
+     * invoke and is dropped by the claimDraw guard.
      */
     public static void drawBeforePresent(RenderTarget renderTarget) {
         resetFrame();
-        overlayRendered = false;
         if (!RenderSystem.isOnRenderThread()) {
-            // 诊断：整帧绘制被跳过的分支（低概率，仍节流记录）
-            long now = System.currentTimeMillis();
-            if (now - lastDrawLogMs > 5000) {
-                lastDrawLogMs = now;
-                Flashback.LOGGER.warn("[flashback-androidfix] drawBeforePresent skipped: not on render thread");
-            }
             return;
         }
+        ImGuiB3DRenderer.lastComposite = null;
         if (ReplayUI.isActive() && ReplayUI.imguiGlfw.isGrabbed()
                 && GLFW.glfwGetMouseButton(Minecraft.getInstance().getWindow().handle(),
                         GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_RELEASE) {
             ReplayUI.imguiGlfw.ungrab();
         }
-        // 绘制全程把传统 GL 的 FBO 绑定圈在 drawOverlay 内，结束后恢复原绑定
-        int oldFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-        try {
-            ReplayUI.drawOverlay();
-        } finally {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, oldFbo);
-        }
-        // 诊断：drawOverlay 返回但离屏未置备 = 内部早退（不活跃/进度屏/空帧）
-        if (!overlayRendered) {
-            long now = System.currentTimeMillis();
-            if (now - lastDrawLogMs > 5000) {
-                lastDrawLogMs = now;
-                Flashback.LOGGER.warn("[flashback-androidfix] drawOverlay produced nothing: active={} screen={}",
-                        ReplayUI.isActive(), Minecraft.getInstance().screen);
-            }
-        }
+        ReplayUI.drawOverlay();
     }
 
     /**
@@ -172,24 +88,11 @@ public final class ImguiPresentFix {
         if (self != Minecraft.getInstance().getMainRenderTarget()) {
             return null;
         }
-        if (!ReplayUI.isActive() || !overlayRendered) {
-            // 诊断：消费环节跳过的原因（区分"没画"与"画了没消费"）
-            long now = System.currentTimeMillis();
-            if (now - lastCompLogMs > 5000) {
-                lastCompLogMs = now;
-                Flashback.LOGGER.warn("[flashback-androidfix] composite skipped: active={} overlayRendered={}",
-                        ReplayUI.isActive(), overlayRendered);
-            }
+        if (!ReplayUI.isActive()) {
             return null;
         }
-        RenderTarget overlay = overlayScreen;
+        RenderTarget overlay = ImGuiB3DRenderer.lastComposite;
         if (overlay == null || overlay.getColorTextureView() == null) {
-            // 诊断：画过但离屏 RT/视图缺失（矛盾态，说明 resize/创建出错）
-            long now = System.currentTimeMillis();
-            if (now - lastCompLogMs > 5000) {
-                lastCompLogMs = now;
-                Flashback.LOGGER.warn("[flashback-androidfix] composite skipped: overlay RT unavailable");
-            }
             return null;
         }
         try {
@@ -197,13 +100,7 @@ public final class ImguiPresentFix {
             int framebufferWidth = FixFramebuffers.framebufferWidth(window);
             int framebufferHeight = FixFramebuffers.framebufferHeight(window);
 
-            // 诊断：读回 overlay 产出（10 秒一次），区分"没画上"与"合成失效"
-            logOverlayReadback();
-
-            // 针对性修复：带 depth attachment（useDepth=true），对齐 Flashback partial
-            // present 成功路径的 tempRT——无 depth 的 RT 作新栈 renderPass 目标时，
-            // MobileGlues（GLES 底层）严格拒绝而 zink 容忍，导致合成静默失效
-            compositeScreen = FixFramebuffers.resizeOrCreate(compositeScreen, framebufferWidth, framebufferHeight, true);
+            compositeScreen = FixFramebuffers.resizeOrCreate(compositeScreen, framebufferWidth, framebufferHeight);
             FixFramebuffers.clear(compositeScreen, 0);
 
             GpuTextureView gameView = self.getColorTextureView();
@@ -222,249 +119,10 @@ public final class ImguiPresentFix {
             CompositeBlit.blitOverlay(overlay.getColorTextureView(), compositeScreen,
                     framebufferWidth, framebufferHeight);
 
-            GpuTextureView result = compositeScreen.getColorTextureView();
-            // 诊断：合成成功（随后立即 presentTexture 上屏）的证据
-            long now = System.currentTimeMillis();
-            if (now - lastCompLogMs > 5000) {
-                lastCompLogMs = now;
-                Flashback.LOGGER.info("[flashback-androidfix] composite built {}x{} -> presentTexture",
-                        framebufferWidth, framebufferHeight);
-            }
-            // 诊断：读回合成结果（10 秒一次），对照 overlay 区分"合成没写进"与"上屏失效"
-            logCompositeReadback(compositeScreen, framebufferWidth, framebufferHeight);
-            return result;
+            return compositeScreen.getColorTextureView();
         } catch (Throwable t) {
             Flashback.LOGGER.error("[flashback-androidfix] composite build failed", t);
             return null;
-        }
-    }
-
-    /**
-     * 诊断：读回 overlay 离屏内容（10 秒一次），统计 alpha 非零样本，
-     * 一次性区分"imgui 绘制无产出（裸 immediate-mode 失效方向）"与
-     * "产出正常但合成/采样环节失效"。
-     */
-    private static void logOverlayReadback() {
-        long now = System.currentTimeMillis();
-        if (now - lastReadLogMs < 10000) {
-            return;
-        }
-        lastReadLogMs = now;
-        int w = overlayW;
-        int h = overlayH;
-        int fbo = overlayFbo();
-        if (w <= 0 || h <= 0 || fbo <= 0) {
-            Flashback.LOGGER.warn("[flashback-androidfix] overlay readback skipped: {}x{} fbo={}", w, h, fbo);
-            return;
-        }
-        int prevFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-        try {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
-            java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
-            int nonZero = 0;
-            int rgbLit = 0;
-            int sampled = 0;
-            // 8 条横带、每带 64 点：覆盖全屏高度分布，避免只采到空白区
-            for (int band = 0; band < 8; band++) {
-                int y = h * (band * 2 + 1) / 16;
-                for (int i = 0; i < 64; i++) {
-                    int x = w * (i * 2 + 1) / 128;
-                    px.clear();
-                    GL11.glReadPixels(x, y, 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, px);
-                    sampled++;
-                    if (px.get(3) != 0) {
-                        nonZero++;
-                    }
-                    if ((px.get(0) & 0xFF) != 0 || (px.get(1) & 0xFF) != 0 || (px.get(2) & 0xFF) != 0) {
-                        rgbLit++;
-                    }
-                }
-            }
-            Flashback.LOGGER.info("[flashback-androidfix] overlay readback: {}/{} non-transparent, {}/{} rgb-lit",
-                    nonZero, sampled, rgbLit, sampled);
-        } catch (Throwable t) {
-            Flashback.LOGGER.warn("[flashback-androidfix] overlay readback failed: {}", t.toString());
-        } finally {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
-        }
-    }
-
-    /**
-     * 诊断：读回 composite 合成结果（10 秒一次），统计非透明/不透明样本，
-     * 与 overlay 读回对照，区分"合成没写进纹理"与"presentTexture 上屏失效"。
-     * FBO 获取走 {@code GlTexture.getFbo}（与 {@link #overlayFbo()} 同款已验证路径）。
-     */
-    private static void logCompositeReadback(RenderTarget composite, int w, int h) {
-        long now = System.currentTimeMillis();
-        if (now - lastCompReadLogMs < 10000 || w <= 0 || h <= 0) {
-            return;
-        }
-        lastCompReadLogMs = now;
-        int prevFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-        try {
-            int fbo = ((GlTexture) composite.getColorTexture()).getFbo(
-                    ((GlDevice) RenderSystem.getDevice()).directStateAccess(), null);
-            if (fbo <= 0) {
-                Flashback.LOGGER.warn("[flashback-androidfix] composite readback skipped: fbo={}", fbo);
-                return;
-            }
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
-            java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
-            int nonZero = 0;
-            int opaque = 0;
-            int rgbLit = 0;
-            int sampled = 0;
-            for (int band = 0; band < 8; band++) {
-                int y = h * (band * 2 + 1) / 16;
-                for (int i = 0; i < 64; i++) {
-                    int x = w * (i * 2 + 1) / 128;
-                    px.clear();
-                    GL11.glReadPixels(x, y, 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, px);
-                    sampled++;
-                    int a = px.get(3) & 0xFF;
-                    if (a != 0) {
-                        nonZero++;
-                    }
-                    if (a >= 200) {
-                        opaque++;
-                    }
-                    if ((px.get(0) & 0xFF) != 0 || (px.get(1) & 0xFF) != 0 || (px.get(2) & 0xFF) != 0) {
-                        rgbLit++;
-                    }
-                }
-            }
-            Flashback.LOGGER.info("[flashback-androidfix] composite readback: {}/{} non-transparent, {}/{} opaque, {}/{} rgb-lit",
-                    nonZero, sampled, opaque, sampled, rgbLit, sampled);
-        } catch (Throwable t) {
-            Flashback.LOGGER.warn("[flashback-androidfix] composite readback failed: {}", t.toString());
-        } finally {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
-        }
-    }
-
-    /**
-     * 诊断：presentTexture 之后读回屏幕（FBO 0，10 秒一次），验证 blit 是否真的写进
-     * backbuffer。与 composite 读回对照判读：composite 高而非透明而 screen 明显低
-     * = blit 静默失败（MobileGlues 直通 GLES 的严格格式检查）；两者都高 = 上屏成功，
-     * 断点在更后端。scissor 此前已被 presentTexture 内部 disable，读回不受裁剪。
-     */
-    public static void logScreenReadback() {
-        int w = overlayW;
-        int h = overlayH;
-        long now = System.currentTimeMillis();
-        if (now - lastScreenReadLogMs < 10000 || w <= 0 || h <= 0) {
-            return;
-        }
-        lastScreenReadLogMs = now;
-        int prevFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-        try {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
-            java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
-            int nonZero = 0;
-            int opaque = 0;
-            int rgbLit = 0;
-            int sampled = 0;
-            for (int band = 0; band < 8; band++) {
-                int y = h * (band * 2 + 1) / 16;
-                for (int i = 0; i < 64; i++) {
-                    int x = w * (i * 2 + 1) / 128;
-                    px.clear();
-                    GL11.glReadPixels(x, y, 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, px);
-                    sampled++;
-                    int a = px.get(3) & 0xFF;
-                    if (a != 0) {
-                        nonZero++;
-                    }
-                    if (a >= 200) {
-                        opaque++;
-                    }
-                    if ((px.get(0) & 0xFF) != 0 || (px.get(1) & 0xFF) != 0 || (px.get(2) & 0xFF) != 0) {
-                        rgbLit++;
-                    }
-                }
-            }
-            Flashback.LOGGER.info("[flashback-androidfix] screen readback: {}/{} non-transparent, {}/{} opaque, {}/{} rgb-lit",
-                    nonZero, sampled, opaque, sampled, rgbLit, sampled);
-        } catch (Throwable t) {
-            Flashback.LOGGER.warn("[flashback-androidfix] screen readback failed: {}", t.toString());
-        } finally {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
-        }
-    }
-
-    /**
-     * 诊断：读回 imgui 字体纹理数据（10 秒一次），区分"纹理上传坏（RGB 黑）"与
-     * "纹理数据正常但采样/顶点属性环节坏"。纹理 id 从 draw data 首个 cmd 取
-     * （ImFontAtlas 未暴露 getter）。走临时 FBO + glReadPixels 路径（与 composite
-     * 读回同款、在 MobileGlues 上已实证可用），规避 glGetTexImage 在 GLES 后端的
-     * 实现差异。
-     */
-    public static void logFontTextureReadback(ImDrawData drawData) {
-        long now = System.currentTimeMillis();
-        if (now - lastFontReadLogMs < 10000) {
-            return;
-        }
-        if (drawData.getCmdListsCount() <= 0 || drawData.getCmdListCmdBufferSize(0) <= 0) {
-            return;
-        }
-        lastFontReadLogMs = now;
-        long texId = drawData.getCmdListCmdBufferTextureId(0, 0);
-        if (texId <= 0) {
-            Flashback.LOGGER.warn("[flashback-androidfix] font texture readback skipped: texId={}", texId);
-            return;
-        }
-        int prevFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-        int fbo = GL30.glGenFramebuffers();
-        try {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
-            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
-                    GL11.GL_TEXTURE_2D, (int) texId, 0);
-            if (GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER) != GL30.GL_FRAMEBUFFER_COMPLETE) {
-                Flashback.LOGGER.warn("[flashback-androidfix] font texture readback skipped: FBO incomplete");
-                return;
-            }
-            int w = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
-            int h = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
-            java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
-            int rgbLit = 0;
-            int alphaNonZero = 0;
-            int sampled = 0;
-            for (int band = 0; band < 8; band++) {
-                int y = h * (band * 2 + 1) / 16;
-                for (int i = 0; i < 64; i++) {
-                    int x = w * (i * 2 + 1) / 128;
-                    px.clear();
-                    GL11.glReadPixels(x, y, 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, px);
-                    sampled++;
-                    if ((px.get(0) & 0xFF) != 0 || (px.get(1) & 0xFF) != 0 || (px.get(2) & 0xFF) != 0) {
-                        rgbLit++;
-                    }
-                    if ((px.get(3) & 0xFF) != 0) {
-                        alphaNonZero++;
-                    }
-                }
-            }
-            Flashback.LOGGER.info("[flashback-androidfix] font texture readback: {}x{} {}/{} rgb-lit, {}/{} alpha",
-                    w, h, rgbLit, sampled, alphaNonZero, sampled);
-        } catch (Throwable t) {
-            Flashback.LOGGER.warn("[flashback-androidfix] font texture readback failed: {}", t.toString());
-        } finally {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
-            GL30.glDeleteFramebuffers(fbo);
-        }
-    }
-
-    /**
-     * CustomImGuiImplGl3DelegateMixin 在 renderDrawData 早退（空帧/零尺寸）时调用：
-     * 记录"renderDrawData 被调用但没有可画内容"的证据，与 prepareOverlay 的
-     * 成功日志互补，用于把断点定位到具体哪一环。
-     */
-    public static void logEmptyDraw(int fbWidth, int fbHeight, int cmdLists) {
-        long now = System.currentTimeMillis();
-        if (now - lastEmptyLogMs > 5000) {
-            lastEmptyLogMs = now;
-            Flashback.LOGGER.warn("[flashback-androidfix] renderDrawData empty: {}x{} cmdLists={}",
-                    fbWidth, fbHeight, cmdLists);
         }
     }
 }

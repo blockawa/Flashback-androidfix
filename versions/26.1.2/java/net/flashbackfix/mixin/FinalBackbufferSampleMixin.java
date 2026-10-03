@@ -19,10 +19,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * blitToScreen can run reliably. renderFrame's own injection points cannot
  * be cancelled that way.
  *
- * BEFORE blitToScreen: reset the per-frame claim and run drawOverlay so the
- * original GL3 backend renders the imgui overlay into this mod's offscreen
- * target (Flashback's afterMainBlit drawOverlay, which fires AFTER the
- * invoke, is dropped by the claimDraw guard).
+ * BEFORE blitToScreen: reset the per-frame claim and draw the imgui overlay
+ * into its offscreen B3D target (Flashback's afterMainBlit drawOverlay,
+ * which fires AFTER the invoke, is dropped by the claimDraw guard).
  *
  * AFTER blitToScreen: whatever blitToScreen managed to present (Flashback's
  * partial game present or the vanilla present) is overwritten here with the
@@ -50,8 +49,6 @@ public abstract class FinalBackbufferSampleMixin {
         GpuTextureView composite = ImguiPresentFix.buildComposite(self);
         if (composite != null) {
             RenderSystem.getDevice().createCommandEncoder().presentTexture(composite);
-            // 诊断：读回 FBO 0 验证 blit 是否真的到达 backbuffer（10 秒一次）
-            ImguiPresentFix.logScreenReadback();
         }
         // 本帧已上屏，现在才执行 ReplayUI 推迟的主 RT resize，避免黑闪
         ImguiPresentFix.applyPendingResize();

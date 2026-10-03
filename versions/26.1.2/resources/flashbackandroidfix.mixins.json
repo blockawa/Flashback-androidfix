@@ -11,6 +11,7 @@
     "ReplayUIGuardMixin",
     "FinalBackbufferSampleMixin",
     "CustomImGuiImplGl3DelegateMixin",
+    "ExportThumbnailTextureMixin",
     "SampleFormatGuardMixin",
     "FlashbackFFmpegNdkCodecMixin",
     "ExportEndSoundMixin"

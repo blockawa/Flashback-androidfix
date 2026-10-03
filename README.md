@@ -10,7 +10,7 @@ An Android fix mod for [Flashback](https://modrinth.com/mod/flashback) that lets
 - **MediaCodec NDK hardware encoding** — Injects `ndk_codec=1` before the encoder opens, forcing FFmpeg off the default JNI path (which needs `MediaCodec` Java classes in the launcher JVM and crashes the export via `avcodec_open2` when they are missing) onto the pure-native NDK `AMediaCodec_*` path; injected into the javacv recorder on 1.21.x and into FlashbackFFmpegFrameRecorder on 26.x.
 - **FFmpeg natives** — Extracts arm64 native libraries at startup for JavaCPP; the jars are not kept in the repo, are resolved from Maven Central per MC version at build time, and must match Flashback's embedded bindings (1.21.x → `ffmpeg 6.1.1-1.5.10`, 26.x → `ffmpeg 8.1.2-1.5.14`), or `avcodec_close()` throws `UnsatisfiedLinkError` on export. Extraction is segmented by natives version (`ffmpeg-natives/<version>/arm64-v8a/`); the two MC versions cannot see each other's extraction root, so leftovers from one version are never loaded by the other.
 - **Interface scaling** — A 0.25–4 scale slider in Preferences that applies immediately.
-- **imgui GL3 offscreen rendering** — On 1.21.11 / 26.1.2 the stock Gl3 overlay draws straight to the default framebuffer (FBO 0), whose immediate-mode path vanishes under the 1.21.5+ present stack in MobileGlues (overlay fully black). Flashback's original GL3 backend is kept untouched; only `setupRenderState`'s bind-to-0 is redirected into this mod's offscreen render target, which is composited onto the screen after present.
+- **imgui B3D rendering** — The Gl3 overlay on 26.1.2 and below renders fully black under MobileGlues; the official 26.2 B3D rendering backend is ported in (including export thumbnails) and packaged only into the 1.21.11 / 26.1.2 jars.
 - **Fixes black flicker** — Main render-target rebuilds caused by editor toggles / frame-area changes are deferred until after the current frame is presented.
 
 Settings are stored in `flashback-androidfix.json` in the Flashback config directory.
@@ -41,7 +41,7 @@ The build is based on [Stonecutter](https://codeberg.org/stonecutter/stonecutter
 - **mediacodec NDK 硬编** — 编码器打开前注入 `ndk_codec=1`，强制 FFmpeg 从默认的 JNI 路径（需要启动器 JVM 里的 `MediaCodec` Java 类，缺失时 `avcodec_open2` 崩导出）改走 NDK `AMediaCodec_*` 纯 native 路径；1.21.x 注入 javacv recorder、26.x 注入 FlashbackFFmpegFrameRecorder。
 - **FFmpeg natives** — 启动时解出 arm64 原生库交给 JavaCPP；jar 不入库，构建时从 Maven Central 按 MC 版本解析，且必须与 Flashback 内嵌绑定一致（1.21.x → `ffmpeg 6.1.1-1.5.10`，26.x → `ffmpeg 8.1.2-1.5.14`），否则导出时 `avcodec_close()` 抛 `UnsatisfiedLinkError`。解压目录按 natives 版本分段（`ffmpeg-natives/<版本>/arm64-v8a/`），两个 MC 版本共享的解压根下互不可见，另一版本的残留文件不会被错误加载。
 - **界面缩放** — Preferences 提供 0.25–4 缩放滑块，调整立即生效。
-- **imgui GL3 离屏渲染** — 1.21.11/26.1.2 的 Gl3 overlay 直画默认帧缓冲（FBO 0），该裸 immediate-mode 路径在 1.21.5+ 新栈 present + MobileGlues 下整个失效（overlay 全黑）：保留 Flashback 原版 GL3 后端不动，仅把 `setupRenderState` 的绑 0 redirect 到本 mod 的离屏 RT，present 之后再合成上屏。
+- **imgui B3D 渲染** — 26.1.2 及以下的 Gl3 overlay 在 MobileGlues 下全黑，将官方 26.2 的 B3D 渲染后端移植进来（含导出缩略图），只打进 1.21.11 / 26.1.2 的 jar。
 - **修复黑闪** — 编辑器开关/帧区域变化时的主 RT 重建推迟到本帧上屏之后执行。
 
 设置保存在 Flashback 配置目录下的 `flashback-androidfix.json`。
