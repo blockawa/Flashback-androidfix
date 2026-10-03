@@ -2,7 +2,6 @@ package net.flashbackfix;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.Window;
-import com.mojang.blaze3d.opengl.GlDevice;
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
@@ -24,6 +23,10 @@ public final class ImguiPresentFix {
     private static RenderTarget overlayScreen;
     /** 本帧 renderDrawData 是否真正执行过（与原版早退条件一致）。 */
     private static boolean overlayRendered;
+    /** 自建离屏 FBO 句柄（-1 = 尚未创建），见 {@link #overlayFbo()}。 */
+    private static int overlayFboId = -1;
+    /** FBO 上次挂接的裸 GL 纹理名：overlay RT resize 换纹理后据此重建。 */
+    private static int overlayFboTexId = -1;
     private static boolean pendingResize;
 
     private ImguiPresentFix() {
@@ -70,17 +73,53 @@ public final class ImguiPresentFix {
     }
 
     /**
-     * 返回 GL3 后端应写入的离屏 FBO。取法与 Flashback SaveableFramebuffer
-     * 一致：新栈 GlTexture 暴露的 getFbo 即其底层 GL 帧缓冲。
-     * 离屏尚未创建时返回 0（防御：维持原行为而不是抛 NPE）。
+     * 返回 GL3 后端应写入的离屏 FBO。
+     *
+     * <p>26.1.2 的 GlDevice 是包私有类（1.21.11 为 public），mod 拿不到
+     * GlTexture.getFbo 所需的 DirectStateAccess 实例，反射又因生产环境
+     * intermediary 不 remap 字符串而不可用，故这里裸 GL 自建 FBO 挂到
+     * overlay 的 color 纹理上——与 MC 内部 FBO 平行、互不干扰，imgui
+     * 产出同样落进该纹理显存，供 buildComposite 合成时读取。
+     *
+     * <p>overlay RT resize 会换纹理，凭缓存的纹理名检测并在下次取用时
+     * 重建；离屏尚未创建或纹理无效时返回 0（防御：维持原行为而不是抛 NPE）。
      */
     public static int overlayFbo() {
         if (overlayScreen == null) {
             return 0;
         }
         GpuTexture texture = overlayScreen.getColorTexture();
-        return ((GlTexture) texture).getFbo(
-                ((GlDevice) RenderSystem.getDevice()).directStateAccess(), null);
+        if (!(texture instanceof GlTexture glTexture) || glTexture.isClosed()) {
+            return 0;
+        }
+        int texId = glTexture.glId();
+        if (texId <= 0) {
+            return 0;
+        }
+        if (overlayFboId > 0 && overlayFboTexId == texId) {
+            return overlayFboId;
+        }
+        // 首次创建或纹理已更换：重建 FBO（保存并恢复调用方的绑定，避免副作用）
+        int previousFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        if (overlayFboId > 0) {
+            GL30.glDeleteFramebuffers(overlayFboId);
+            overlayFboId = -1;
+        }
+        int fbo = GL30.glGenFramebuffers();
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL11.GL_TEXTURE_2D, texId, 0);
+        if (GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER) != GL30.GL_FRAMEBUFFER_COMPLETE) {
+            // 挂接失败：删掉半成品、回退默认帧缓冲，宁可 overlay 不出也不给坏句柄
+            GL30.glDeleteFramebuffers(fbo);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFbo);
+            Flashback.LOGGER.warn("[flashback-androidfix] overlay FBO incomplete, falling back to default");
+            return 0;
+        }
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFbo);
+        overlayFboId = fbo;
+        overlayFboTexId = texId;
+        return fbo;
     }
 
     /**
