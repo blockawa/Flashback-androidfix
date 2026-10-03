@@ -30,8 +30,18 @@ public final class FixFramebuffers {
     }
 
     public static RenderTarget resizeOrCreate(RenderTarget renderTarget, int width, int height) {
+        return resizeOrCreate(renderTarget, width, height, false);
+    }
+
+    /**
+     * @param useDepth 是否创建 depth attachment。作新栈 renderPass 合成目标的 RT
+     *                 必须传 true：无 depth 的 RT 在 MobileGlues（GLES 底层）下会被
+     *                 严格拒绝而 zink 容忍，导致合成静默失效（对齐 Flashback 的
+     *                 partial present tempRT 创建参数）。
+     */
+    public static RenderTarget resizeOrCreate(RenderTarget renderTarget, int width, int height, boolean useDepth) {
         if (renderTarget == null) {
-            renderTarget = new TextureTarget(null, width, height, false);
+            renderTarget = new TextureTarget(null, width, height, useDepth);
         } else if (renderTarget.width != width || renderTarget.height != height) {
             renderTarget.resize(width, height);
         }

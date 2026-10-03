@@ -32,6 +32,10 @@ public final class ImguiPresentFix {
     /** prepareOverlay 记录的本帧离屏尺寸：读回诊断用，规避 RenderTarget 尺寸 API 的版本差异。 */
     private static int overlayW;
     private static int overlayH;
+    /** composite 读回诊断节流：10 秒一次（与 overlay 读回独立计时）。 */
+    private static long lastCompReadLogMs;
+    /** 屏幕（FBO 0）读回诊断节流：10 秒一次，验证 presentTexture 的 blit 是否真的到达 backbuffer。 */
+    private static long lastScreenReadLogMs;
     private static boolean pendingResize;
 
     private ImguiPresentFix() {
@@ -193,7 +197,10 @@ public final class ImguiPresentFix {
             // 诊断：读回 overlay 产出（10 秒一次），区分"没画上"与"合成失效"
             logOverlayReadback();
 
-            compositeScreen = FixFramebuffers.resizeOrCreate(compositeScreen, framebufferWidth, framebufferHeight);
+            // 针对性修复：带 depth attachment（useDepth=true），对齐 Flashback partial
+            // present 成功路径的 tempRT——无 depth 的 RT 作新栈 renderPass 目标时，
+            // MobileGlues（GLES 底层）严格拒绝而 zink 容忍，导致合成静默失效
+            compositeScreen = FixFramebuffers.resizeOrCreate(compositeScreen, framebufferWidth, framebufferHeight, true);
             FixFramebuffers.clear(compositeScreen, 0);
 
             GpuTextureView gameView = self.getColorTextureView();
@@ -220,6 +227,8 @@ public final class ImguiPresentFix {
                 Flashback.LOGGER.info("[flashback-androidfix] composite built {}x{} -> presentTexture",
                         framebufferWidth, framebufferHeight);
             }
+            // 诊断：读回合成结果（10 秒一次），对照 overlay 区分"合成没写进"与"上屏失效"
+            logCompositeReadback(compositeScreen, framebufferWidth, framebufferHeight);
             return result;
         } catch (Throwable t) {
             Flashback.LOGGER.error("[flashback-androidfix] composite build failed", t);
@@ -268,6 +277,101 @@ public final class ImguiPresentFix {
                     nonZero, sampled);
         } catch (Throwable t) {
             Flashback.LOGGER.warn("[flashback-androidfix] overlay readback failed: {}", t.toString());
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+        }
+    }
+
+    /**
+     * 诊断：读回 composite 合成结果（10 秒一次），统计非透明/不透明样本，
+     * 与 overlay 读回对照，区分"合成没写进纹理"与"presentTexture 上屏失效"。
+     * FBO 获取走 {@code GlTexture.getFbo}（与 {@link #overlayFbo()} 同款已验证路径）。
+     */
+    private static void logCompositeReadback(RenderTarget composite, int w, int h) {
+        long now = System.currentTimeMillis();
+        if (now - lastCompReadLogMs < 10000 || w <= 0 || h <= 0) {
+            return;
+        }
+        lastCompReadLogMs = now;
+        int prevFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        try {
+            int fbo = ((GlTexture) composite.getColorTexture()).getFbo(
+                    ((GlDevice) RenderSystem.getDevice()).directStateAccess(), null);
+            if (fbo <= 0) {
+                Flashback.LOGGER.warn("[flashback-androidfix] composite readback skipped: fbo={}", fbo);
+                return;
+            }
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+            java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
+            int nonZero = 0;
+            int opaque = 0;
+            int sampled = 0;
+            for (int band = 0; band < 8; band++) {
+                int y = h * (band * 2 + 1) / 16;
+                for (int i = 0; i < 64; i++) {
+                    int x = w * (i * 2 + 1) / 128;
+                    px.clear();
+                    GL11.glReadPixels(x, y, 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, px);
+                    sampled++;
+                    int a = px.get(3) & 0xFF;
+                    if (a != 0) {
+                        nonZero++;
+                    }
+                    if (a >= 200) {
+                        opaque++;
+                    }
+                }
+            }
+            Flashback.LOGGER.info("[flashback-androidfix] composite readback: {}/{} non-transparent, {}/{} opaque",
+                    nonZero, sampled, opaque, sampled);
+        } catch (Throwable t) {
+            Flashback.LOGGER.warn("[flashback-androidfix] composite readback failed: {}", t.toString());
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+        }
+    }
+
+    /**
+     * 诊断：presentTexture 之后读回屏幕（FBO 0，10 秒一次），验证 blit 是否真的写进
+     * backbuffer。与 composite 读回对照判读：composite 高而非透明而 screen 明显低
+     * = blit 静默失败（MobileGlues 直通 GLES 的严格格式检查）；两者都高 = 上屏成功，
+     * 断点在更后端。scissor 此前已被 presentTexture 内部 disable，读回不受裁剪。
+     */
+    public static void logScreenReadback() {
+        int w = overlayW;
+        int h = overlayH;
+        long now = System.currentTimeMillis();
+        if (now - lastScreenReadLogMs < 10000 || w <= 0 || h <= 0) {
+            return;
+        }
+        lastScreenReadLogMs = now;
+        int prevFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+            java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
+            int nonZero = 0;
+            int opaque = 0;
+            int sampled = 0;
+            for (int band = 0; band < 8; band++) {
+                int y = h * (band * 2 + 1) / 16;
+                for (int i = 0; i < 64; i++) {
+                    int x = w * (i * 2 + 1) / 128;
+                    px.clear();
+                    GL11.glReadPixels(x, y, 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, px);
+                    sampled++;
+                    int a = px.get(3) & 0xFF;
+                    if (a != 0) {
+                        nonZero++;
+                    }
+                    if (a >= 200) {
+                        opaque++;
+                    }
+                }
+            }
+            Flashback.LOGGER.info("[flashback-androidfix] screen readback: {}/{} non-transparent, {}/{} opaque",
+                    nonZero, sampled, opaque, sampled);
+        } catch (Throwable t) {
+            Flashback.LOGGER.warn("[flashback-androidfix] screen readback failed: {}", t.toString());
         } finally {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
         }

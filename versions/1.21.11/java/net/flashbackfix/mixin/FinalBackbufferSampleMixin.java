@@ -49,6 +49,8 @@ public abstract class FinalBackbufferSampleMixin {
         GpuTextureView composite = ImguiPresentFix.buildComposite(self);
         if (composite != null) {
             RenderSystem.getDevice().createCommandEncoder().presentTexture(composite);
+            // 诊断：读回 FBO 0 验证 blit 是否真的到达 backbuffer（10 秒一次）
+            ImguiPresentFix.logScreenReadback();
         }
         // 本帧已上屏，现在才执行 ReplayUI 推迟的主 RT resize，避免黑闪
         ImguiPresentFix.applyPendingResize();
