@@ -22,6 +22,11 @@ public final class ImguiPresentFix {
     private static RenderTarget overlayScreen;
     /** 本帧 renderDrawData 是否真正执行过（与原版早退条件一致）。 */
     private static boolean overlayRendered;
+    /** 诊断日志节流：各点位独立 5 秒窗口，防止黑屏时每帧刷日志。 */
+    private static long lastDrawLogMs;
+    private static long lastPrepLogMs;
+    private static long lastCompLogMs;
+    private static long lastEmptyLogMs;
     private static boolean pendingResize;
 
     private ImguiPresentFix() {
@@ -90,8 +95,15 @@ public final class ImguiPresentFix {
     public static void prepareOverlay(int fbWidth, int fbHeight) {
         overlayScreen = FixFramebuffers.resizeOrCreate(overlayScreen, fbWidth, fbHeight);
         FixFramebuffers.clear(overlayScreen, 0);
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, overlayFbo());
+        int fbo = overlayFbo();
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
         overlayRendered = true;
+        // 诊断：renderDrawData 真正执行且通过原版早退条件的证据（绘制链第一环）
+        long now = System.currentTimeMillis();
+        if (now - lastPrepLogMs > 5000) {
+            lastPrepLogMs = now;
+            Flashback.LOGGER.info("[flashback-androidfix] overlay prepared {}x{} fbo={}", fbWidth, fbHeight, fbo);
+        }
     }
 
     /**
@@ -106,6 +118,12 @@ public final class ImguiPresentFix {
         resetFrame();
         overlayRendered = false;
         if (!RenderSystem.isOnRenderThread()) {
+            // 诊断：整帧绘制被跳过的分支（低概率，仍节流记录）
+            long now = System.currentTimeMillis();
+            if (now - lastDrawLogMs > 5000) {
+                lastDrawLogMs = now;
+                Flashback.LOGGER.warn("[flashback-androidfix] drawBeforePresent skipped: not on render thread");
+            }
             return;
         }
         if (ReplayUI.isActive() && ReplayUI.imguiGlfw.isGrabbed()
@@ -120,6 +138,15 @@ public final class ImguiPresentFix {
         } finally {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, oldFbo);
         }
+        // 诊断：drawOverlay 返回但离屏未置备 = 内部早退（不活跃/进度屏/空帧）
+        if (!overlayRendered) {
+            long now = System.currentTimeMillis();
+            if (now - lastDrawLogMs > 5000) {
+                lastDrawLogMs = now;
+                Flashback.LOGGER.warn("[flashback-androidfix] drawOverlay produced nothing: active={} screen={}",
+                        ReplayUI.isActive(), Minecraft.getInstance().screen);
+            }
+        }
     }
 
     /**
@@ -132,10 +159,23 @@ public final class ImguiPresentFix {
             return null;
         }
         if (!ReplayUI.isActive() || !overlayRendered) {
+            // 诊断：消费环节跳过的原因（区分"没画"与"画了没消费"）
+            long now = System.currentTimeMillis();
+            if (now - lastCompLogMs > 5000) {
+                lastCompLogMs = now;
+                Flashback.LOGGER.warn("[flashback-androidfix] composite skipped: active={} overlayRendered={}",
+                        ReplayUI.isActive(), overlayRendered);
+            }
             return null;
         }
         RenderTarget overlay = overlayScreen;
         if (overlay == null || overlay.getColorTextureView() == null) {
+            // 诊断：画过但离屏 RT/视图缺失（矛盾态，说明 resize/创建出错）
+            long now = System.currentTimeMillis();
+            if (now - lastCompLogMs > 5000) {
+                lastCompLogMs = now;
+                Flashback.LOGGER.warn("[flashback-androidfix] composite skipped: overlay RT unavailable");
+            }
             return null;
         }
         try {
@@ -162,10 +202,32 @@ public final class ImguiPresentFix {
             CompositeBlit.blitOverlay(overlay.getColorTextureView(), compositeScreen,
                     framebufferWidth, framebufferHeight);
 
-            return compositeScreen.getColorTextureView();
+            GpuTextureView result = compositeScreen.getColorTextureView();
+            // 诊断：合成成功（随后立即 presentTexture 上屏）的证据
+            long now = System.currentTimeMillis();
+            if (now - lastCompLogMs > 5000) {
+                lastCompLogMs = now;
+                Flashback.LOGGER.info("[flashback-androidfix] composite built {}x{} -> presentTexture",
+                        framebufferWidth, framebufferHeight);
+            }
+            return result;
         } catch (Throwable t) {
             Flashback.LOGGER.error("[flashback-androidfix] composite build failed", t);
             return null;
+        }
+    }
+
+    /**
+     * CustomImGuiImplGl3DelegateMixin 在 renderDrawData 早退（空帧/零尺寸）时调用：
+     * 记录"renderDrawData 被调用但没有可画内容"的证据，与 prepareOverlay 的
+     * 成功日志互补，用于把断点定位到具体哪一环。
+     */
+    public static void logEmptyDraw(int fbWidth, int fbHeight, int cmdLists) {
+        long now = System.currentTimeMillis();
+        if (now - lastEmptyLogMs > 5000) {
+            lastEmptyLogMs = now;
+            Flashback.LOGGER.warn("[flashback-androidfix] renderDrawData empty: {}x{} cmdLists={}",
+                    fbWidth, fbHeight, cmdLists);
         }
     }
 }
