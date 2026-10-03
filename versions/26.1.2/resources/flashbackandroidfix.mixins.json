@@ -12,9 +12,9 @@
     "FinalBackbufferSampleMixin",
     "CustomImGuiImplGl3DelegateMixin",
     "ExportThumbnailTextureMixin",
-    "MousePosFixMixin",
     "SampleFormatGuardMixin",
-    "FlashbackFFmpegNdkCodecMixin"
+    "FlashbackFFmpegNdkCodecMixin",
+    "ExportEndSoundMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -10,8 +10,9 @@ import java.nio.file.Path;
 /**
  * 本 mod 自有的设置：{@code config/flashback/flashback-androidfix.json}。
  *
- * <p>存放 imgui 界面缩放。滑块或重置按钮改动时立即调用 {@link #apply()}——写盘并把值交给
- * {@link #appliedScale()}，下一帧经 {@code ReplayUIMixin} 实时生效，无需手动确认。
+ * <p>存放 imgui 界面缩放。滑块或重置按钮改动时只调用 {@link #save()} 落盘，点「重新应用」
+ * 按钮才调用 {@link #apply()}——写盘并把值交给 {@link #appliedScale()}，下一帧经
+ * {@code ReplayUIMixin} 生效并重建字体。
  */
 public final class FixConfig {
 

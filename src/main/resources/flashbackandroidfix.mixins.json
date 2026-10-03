@@ -9,7 +9,8 @@
     "ReplayUIMixin",
     "StartExportWindowMixin",
     "SampleFormatGuardMixin",
-    "FlashbackFFmpegNdkCodecMixin"
+    "FlashbackFFmpegNdkCodecMixin",
+    "ExportEndSoundMixin"
   ],
   "injectors": {
     "defaultRequire": 1

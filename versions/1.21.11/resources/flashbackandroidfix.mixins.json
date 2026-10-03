@@ -12,10 +12,10 @@
     "FinalBackbufferSampleMixin",
     "CustomImGuiImplGl3DelegateMixin",
     "ExportThumbnailTextureMixin",
-    "MousePosFixMixin",
     "SaveableFramebufferMixin",
     "SampleFormatGuardMixin",
-    "JavacvNdkCodecMixin"
+    "JavacvNdkCodecMixin",
+    "ExportEndSoundMixin"
   ],
   "injectors": {
     "defaultRequire": 1

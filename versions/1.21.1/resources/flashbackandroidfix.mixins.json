@@ -10,10 +10,8 @@
     "StartExportWindowMixin",
     "SampleFormatGuardMixin",
     "SaveableFramebufferMixin",
-    "FinalPresentMixin",
-    "ReplayUIGuardMixin",
-    "Gl3OffscreenMixin",
-    "JavacvNdkCodecMixin"
+    "JavacvNdkCodecMixin",
+    "ExportEndSoundMixin"
   ],
   "injectors": {
     "defaultRequire": 1
