@@ -8,6 +8,7 @@
     "PreferencesWindowMixin",
     "ReplayUIMixin",
     "StartExportWindowMixin",
+    "SampleFormatGuardMixin",
     "FlashbackFFmpegNdkCodecMixin"
   ],
   "injectors": {

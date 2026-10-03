@@ -8,6 +8,7 @@
     "PreferencesWindowMixin",
     "ReplayUIMixin",
     "StartExportWindowMixin",
+    "SampleFormatGuardMixin",
     "SaveableFramebufferMixin",
     "FinalPresentMixin",
     "ReplayUIGuardMixin",

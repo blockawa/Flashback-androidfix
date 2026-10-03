@@ -1,6 +1,7 @@
 package net.flashbackfix.mixin;
 
 import com.moulberry.flashback.Flashback;
+import com.moulberry.flashback.combo_options.VideoCodec;
 import com.moulberry.flashback.configuration.FlashbackConfigV1;
 import com.moulberry.flashback.editor.ui.windows.StartExportWindow;
 import com.moulberry.flashback.exporting.ExportSettings;
@@ -33,6 +34,12 @@ import java.util.concurrent.CompletableFuture;
  *
  * <p>The path field itself lives in the Preferences window ({@code PreferencesWindowMixin});
  * this mixin only keeps the folder seeding and replaces the native dialogs during export.
+ *
+ * <p>另包含编码器 UI 合并与编码器强制（见类底部 {@code flashbackandroidfix$collapseEncoderDropdown}
+ * 与 {@code flashbackandroidfix$forceHardwareEncoder}）：删除导出设置里的 Encoder 第二下拉，
+ * 并把实际编码器锁到探测首项硬编（正常设备即 mediacodec）。1.21.1 侧的强制注入在
+ * {@code versions/1.21.1} 的 {@code ForceEncoderMixin}（该版 config 的编码器字段类型不同，
+ * 不能与其余五版共用注入）。
  */
 @Mixin(value = StartExportWindow.class, remap = false)
 public abstract class StartExportWindowMixin {
@@ -123,6 +130,55 @@ public abstract class StartExportWindowMixin {
             }
             return settings;
         }));
+    }
+
+    /**
+     * 编码器下拉合并：导出设置原本有两个下拉（编解码 + 编码器），这里让
+     * {@code renderVideoOptions} 内的数据源调用 {@code getEncoders()}（ordinal = 0）
+     * 只返回探测首项，配合原生 {@code encoders.length > 1} 渲染条件使 Encoder 第二下拉
+     * 整体不再出现，只留编解码一个下拉。
+     *
+     * <p>仅影响 UI 渲染：handler 自身与编码路径的 {@code getEncoders()} 调用都在本方法
+     * 之外，拿到的仍是完整列表。实际编码器由 {@code flashbackandroidfix$forceHardwareEncoder}
+     * （1.21.4+ / 26.x）与 {@code ForceEncoderMixin}（1.21.1）强制锁到探测首项硬编。
+     *
+     * <p>六版本（1.21.1 / 1.21.4 / 1.21.11 / 26.1.2 / 26.2 / 26.3）方法边界已逐一核对：
+     * 下拉调用均在 {@code renderVideoOptions} 内且各仅此一处，签名一致。
+     */
+    @Redirect(
+        method = "renderVideoOptions",
+        at = @At(
+            value = "INVOKE",
+            target = "Lcom/moulberry/flashback/combo_options/VideoCodec;getEncoders()[Ljava/lang/String;",
+            ordinal = 0
+        )
+    )
+    private static String[] flashbackandroidfix$collapseEncoderDropdown(VideoCodec videoCodec) {
+        String[] encoders = videoCodec.getEncoders();
+        if (encoders.length <= 1) return encoders;
+        return new String[]{encoders[0]};
+    }
+
+    /**
+     * 强制视频编码器为探测首项硬编：{@code getSelectedEncoderForCodec} 是 0.39.10-for-1.21.4+
+     * 与 0.43.x 五版本唯一的编码器取值入口（原生逻辑：配置名在有效列表内则用之，否则首项
+     * 兜底），在 RETURN 直接改为恒返回首项——{@code getEncoders()} 按
+     * hardware → hybrid → software → avoid 分桶，首项即 mediacodec 硬编
+     * （H264 → h264_mediacodec），配置里手选残留的编码器名被无条件覆盖。
+     *
+     * <p>{@code require = 0}：1.21.1（0.39.10-for-MC1.21.1）无此方法（该版是
+     * {@code getEncoders()[selectedVideoEncoder[0]]} 索引直取），本注入静默跳过，
+     * 1.21.1 侧的强制见 {@code versions/1.21.1} 的 {@code ForceEncoderMixin}。
+     *
+     * <p>handler 内 {@code useVideoCodec.getEncoders()} 位于 mixin 合成方法、不在
+     * {@code renderVideoOptions} 内，不受 collapse redirect 影响，拿到完整列表。
+     */
+    @Inject(method = "getSelectedEncoderForCodec", at = @At("RETURN"), cancellable = true, require = 0)
+    private static void flashbackandroidfix$forceHardwareEncoder(FlashbackConfigV1 config, VideoCodec useVideoCodec,
+                                                                 CallbackInfoReturnable<String> cir) {
+        String[] encoders = useVideoCodec.getEncoders();
+        if (encoders == null || encoders.length == 0) return;
+        cir.setReturnValue(encoders[0]);
     }
 
 }

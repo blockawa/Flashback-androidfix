@@ -8,11 +8,13 @@
     "PreferencesWindowMixin",
     "ReplayUIMixin",
     "StartExportWindowMixin",
+    "SampleFormatGuardMixin",
     "SaveableFramebufferMixin",
     "FinalPresentMixin",
     "ReplayUIGuardMixin",
     "Gl3OffscreenMixin",
-    "JavacvNdkCodecMixin"
+    "JavacvNdkCodecMixin",
+    "ForceEncoderMixin"
   ],
   "injectors": {
     "defaultRequire": 1
