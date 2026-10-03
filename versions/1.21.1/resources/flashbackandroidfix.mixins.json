@@ -13,8 +13,7 @@
     "FinalPresentMixin",
     "ReplayUIGuardMixin",
     "Gl3OffscreenMixin",
-    "JavacvNdkCodecMixin",
-    "ForceEncoderMixin"
+    "JavacvNdkCodecMixin"
   ],
   "injectors": {
     "defaultRequire": 1

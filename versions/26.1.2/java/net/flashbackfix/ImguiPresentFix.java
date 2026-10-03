@@ -52,7 +52,8 @@ public final class ImguiPresentFix {
             // 空窗期显示黑——正常加载观感——直到游戏首帧渲染覆盖。
             RenderTarget mainTarget = minecraft.getMainRenderTarget();
             if (mainTarget != null) {
-                FixFramebuffers.clear(mainTarget, 0);
+                // 26.x 用 Flashback 自带的 FramebufferUtils（本版源集没有 FixFramebuffers）
+                FramebufferUtils.clear(mainTarget, 0);
             }
         }
     }

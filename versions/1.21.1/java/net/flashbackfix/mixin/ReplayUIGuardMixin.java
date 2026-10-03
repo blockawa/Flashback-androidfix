@@ -32,10 +32,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ReplayUIGuardMixin {
 
     @Shadow
-    private static boolean isActiveInternal();
+    private static boolean isActiveInternal() {
+        throw new AssertionError("mixin shadow");
+    }
 
     @Shadow
-    private static void transitionActiveState(boolean active);
+    private static void transitionActiveState(boolean active) {
+        throw new AssertionError("mixin shadow");
+    }
 
     @Inject(method = "drawOverlay()V", at = @At("HEAD"), cancellable = true)
     private static void flashbackandroidfix$skipDuplicate(CallbackInfo ci) {

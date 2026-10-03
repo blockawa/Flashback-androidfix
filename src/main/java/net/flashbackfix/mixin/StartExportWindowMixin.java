@@ -37,9 +37,8 @@ import java.util.concurrent.CompletableFuture;
  *
  * <p>另包含编码器 UI 合并与编码器强制（见类底部 {@code flashbackandroidfix$collapseEncoderDropdown}
  * 与 {@code flashbackandroidfix$forceHardwareEncoder}）：删除导出设置里的 Encoder 第二下拉，
- * 并把实际编码器锁到探测首项硬编（正常设备即 mediacodec）。1.21.1 侧的强制注入在
- * {@code versions/1.21.1} 的 {@code ForceEncoderMixin}（该版 config 的编码器字段类型不同，
- * 不能与其余五版共用注入）。
+ * 并把实际编码器锁到探测首项硬编（正常设备即 mediacodec），六版本统一走这两个注入
+ * （1.21.1 发行 jar 与其余五版同构，经 javap 实证）。
  */
 @Mixin(value = StartExportWindow.class, remap = false)
 public abstract class StartExportWindowMixin {
@@ -140,7 +139,7 @@ public abstract class StartExportWindowMixin {
      *
      * <p>仅影响 UI 渲染：handler 自身与编码路径的 {@code getEncoders()} 调用都在本方法
      * 之外，拿到的仍是完整列表。实际编码器由 {@code flashbackandroidfix$forceHardwareEncoder}
-     * （1.21.4+ / 26.x）与 {@code ForceEncoderMixin}（1.21.1）强制锁到探测首项硬编。
+     * 强制锁到探测首项硬编（六版本统一，含 1.21.1）。
      *
      * <p>六版本（1.21.1 / 1.21.4 / 1.21.11 / 26.1.2 / 26.2 / 26.3）方法边界已逐一核对：
      * 下拉调用均在 {@code renderVideoOptions} 内且各仅此一处，签名一致。
@@ -166,9 +165,9 @@ public abstract class StartExportWindowMixin {
      * hardware → hybrid → software → avoid 分桶，首项即 mediacodec 硬编
      * （H264 → h264_mediacodec），配置里手选残留的编码器名被无条件覆盖。
      *
-     * <p>{@code require = 0}：1.21.1（0.39.10-for-MC1.21.1）无此方法（该版是
-     * {@code getEncoders()[selectedVideoEncoder[0]]} 索引直取），本注入静默跳过，
-     * 1.21.1 侧的强制见 {@code versions/1.21.1} 的 {@code ForceEncoderMixin}。
+     * <p>{@code require = 0} 兜底：六版发行 jar 均含此方法（1.21.1 经 javap 实证同样为
+     * String 版 getSelectedEncoderForCodec——工作区参考源码与发行 jar 不符，一律以 jar 为准），
+     * 正常六版全命中；保留 {@code require = 0} 是防未来版本移除该方法时静默降级而非崩溃。
      *
      * <p>handler 内 {@code useVideoCodec.getEncoders()} 位于 mixin 合成方法、不在
      * {@code renderVideoOptions} 内，不受 collapse redirect 影响，拿到完整列表。
