@@ -4,7 +4,8 @@ import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.exporting.ExportJob;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
-import net.minecraft.client.resources.sounds.SoundManager;
+import net.minecraft.client.sounds.SoundEngine;
+import net.minecraft.client.sounds.SoundManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -14,7 +15,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 修导出完成"叮"提示音丢失。
+ * 修导出完成"叮"提示音丢失（PlayResult 新签名版，1.21.11/26.x）。
  *
  * <p>{@code ExportJob.run()} 的 finally 无条件 {@code stop()} 后立刻连播
  * NOTE_BLOCK_CHIME + NOTE_BLOCK_BELL，但真机 log 实证：安卓上导出结束瞬间音频
@@ -25,9 +26,16 @@ import java.util.concurrent.TimeUnit;
  * 1.5 秒（避开引擎重启窗口）后经 {@code Minecraft.execute} 回主线程播放；前面的
  * {@code stop()} 保持原样。不重启的场景只是提示音晚 1.5 秒，无其他行为变化。
  *
- * <p>0.39.10（1.21.1/1.21.4/1.21.11）与 0.43.x（26.1/26.2/26.3）的该段代码逐行
- * 一致（仅行号差），共享层一份覆盖全 6 版本。SoundManager/SoundInstance 是 MC
- * 类型，类级保持默认 remap=true 以便 @At target 重映射到 intermediary。
+ * <p><b>按版本分文件的原因</b>：MC 1.21.9 起 {@code SoundManager.play} 返回值由
+ * {@code void} 改为 {@code SoundEngine$PlayResult}——本版 call site 是 PlayResult
+ * （Flashback 自家 MixinMultiPlayerGameMode 的 @At target 同款描述符），1.21.1/1.21.4
+ * 则是 {@code )V}（发行 jar 字节码 javap 实证），用返回 void 的同名文件。@At 描述符
+ * 与 handler 返回类型必须与 call site 精确一致，无法共存于一份文件。
+ * {@code run()} 内 play 恰好 2 处（require = 2），两处返回值均被丢弃，handler
+ * 返回 null 安全。
+ *
+ * <p>类级保持默认 remap=true：SoundManager/SoundInstance/SoundEngine 是 MC 类型
+ * 需重映射，Flashback 的 method "run" 在映射表无条目时原样保留（未映射成员原样保留是 mixin AP 的既定行为）。
  */
 @Mixin(value = ExportJob.class)
 public abstract class ExportEndSoundMixin {
@@ -47,11 +55,11 @@ public abstract class ExportEndSoundMixin {
             method = "run",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/resources/sounds/SoundManager;play(Lnet/minecraft/client/resources/sounds/SoundInstance;)V"
+                    target = "Lnet/minecraft/client/sounds/SoundManager;play(Lnet/minecraft/client/resources/sounds/SoundInstance;)Lnet/minecraft/client/sounds/SoundEngine$PlayResult;"
             ),
             require = 2
     )
-    private void flashbackandroidfix$delayEndSound(SoundManager manager, SoundInstance instance) {
+    private SoundEngine.PlayResult flashbackandroidfix$delayEndSound(SoundManager manager, SoundInstance instance) {
         FLASHBACKANDROIDFIX_END_SOUND_SCHEDULER.schedule(() -> {
             try {
                 Minecraft.getInstance().execute(() -> manager.play(instance));
@@ -60,5 +68,6 @@ public abstract class ExportEndSoundMixin {
                 Flashback.LOGGER.warn("[flashback-androidfix] 导出完成音效播放失败: {}", t.toString());
             }
         }, 1500, TimeUnit.MILLISECONDS);
+        return null;
     }
 }
