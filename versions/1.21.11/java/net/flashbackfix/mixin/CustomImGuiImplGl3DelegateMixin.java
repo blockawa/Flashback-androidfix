@@ -50,6 +50,8 @@ public class CustomImGuiImplGl3DelegateMixin {
         int fbHeight = (int) (drawData.getDisplaySizeY() * drawData.getFramebufferScaleY());
         if (fbWidth > 0 && fbHeight > 0 && drawData.getCmdListsCount() > 0) {
             ImguiPresentFix.prepareOverlay(fbWidth, fbHeight);
+            // 诊断：读回字体纹理数据，区分"上传坏"与"采样/顶点属性坏"
+            ImguiPresentFix.logFontTextureReadback(drawData);
         } else {
             // 诊断：renderDrawData 被调但早退（空帧/零尺寸），离屏未置备
             ImguiPresentFix.logEmptyDraw(fbWidth, fbHeight, drawData.getCmdListsCount());

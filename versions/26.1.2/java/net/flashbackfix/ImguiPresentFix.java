@@ -10,6 +10,7 @@ import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.FramebufferUtils;
 import com.moulberry.flashback.WindowSizeTracker;
 import com.moulberry.flashback.editor.ui.ReplayUI;
+import imgui.moulberry90.ImDrawData;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
@@ -41,6 +42,8 @@ public final class ImguiPresentFix {
     private static long lastCompReadLogMs;
     /** 屏幕（FBO 0）读回诊断节流：10 秒一次，验证 presentTexture 的 blit 是否真的到达 backbuffer。 */
     private static long lastScreenReadLogMs;
+    /** 字体纹理读回诊断节流：10 秒一次，区分"纹理上传坏"与"采样/顶点属性坏"。 */
+    private static long lastFontReadLogMs;
     private static boolean pendingResize;
 
     private ImguiPresentFix() {
@@ -442,6 +445,68 @@ public final class ImguiPresentFix {
             Flashback.LOGGER.warn("[flashback-androidfix] screen readback failed: {}", t.toString());
         } finally {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+        }
+    }
+
+    /**
+     * 诊断：读回 imgui 字体纹理数据（10 秒一次），区分"纹理上传坏（RGB 黑）"与
+     * "纹理数据正常但采样/顶点属性环节坏"。纹理 id 从 draw data 首个 cmd 取
+     * （ImFontAtlas 未暴露 getter）。走临时 FBO + glReadPixels 路径（与 composite
+     * 读回同款、在 MobileGlues 上已实证可用），规避 glGetTexImage 在 GLES 后端的
+     * 实现差异。
+     */
+    public static void logFontTextureReadback(ImDrawData drawData) {
+        long now = System.currentTimeMillis();
+        if (now - lastFontReadLogMs < 10000) {
+            return;
+        }
+        if (drawData.getCmdListsCount() <= 0 || drawData.getCmdListCmdBufferSize(0) <= 0) {
+            return;
+        }
+        lastFontReadLogMs = now;
+        long texId = drawData.getCmdListCmdBufferTextureId(0, 0);
+        if (texId <= 0) {
+            Flashback.LOGGER.warn("[flashback-androidfix] font texture readback skipped: texId={}", texId);
+            return;
+        }
+        int prevFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int fbo = GL30.glGenFramebuffers();
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                    GL11.GL_TEXTURE_2D, (int) texId, 0);
+            if (GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER) != GL30.GL_FRAMEBUFFER_COMPLETE) {
+                Flashback.LOGGER.warn("[flashback-androidfix] font texture readback skipped: FBO incomplete");
+                return;
+            }
+            int w = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
+            int h = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
+            java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
+            int rgbLit = 0;
+            int alphaNonZero = 0;
+            int sampled = 0;
+            for (int band = 0; band < 8; band++) {
+                int y = h * (band * 2 + 1) / 16;
+                for (int i = 0; i < 64; i++) {
+                    int x = w * (i * 2 + 1) / 128;
+                    px.clear();
+                    GL11.glReadPixels(x, y, 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, px);
+                    sampled++;
+                    if ((px.get(0) & 0xFF) != 0 || (px.get(1) & 0xFF) != 0 || (px.get(2) & 0xFF) != 0) {
+                        rgbLit++;
+                    }
+                    if ((px.get(3) & 0xFF) != 0) {
+                        alphaNonZero++;
+                    }
+                }
+            }
+            Flashback.LOGGER.info("[flashback-androidfix] font texture readback: {}x{} {}/{} rgb-lit, {}/{} alpha",
+                    w, h, rgbLit, sampled, alphaNonZero, sampled);
+        } catch (Throwable t) {
+            Flashback.LOGGER.warn("[flashback-androidfix] font texture readback failed: {}", t.toString());
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+            GL30.glDeleteFramebuffers(fbo);
         }
     }
 
