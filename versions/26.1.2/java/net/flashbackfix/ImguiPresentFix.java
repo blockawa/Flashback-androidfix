@@ -32,6 +32,11 @@ public final class ImguiPresentFix {
     private static long lastPrepLogMs;
     private static long lastCompLogMs;
     private static long lastEmptyLogMs;
+    /** 读回诊断节流：10 秒一次（glReadPixels 有同步开销）。 */
+    private static long lastReadLogMs;
+    /** prepareOverlay 记录的本帧离屏尺寸：读回诊断用，规避 RenderTarget 尺寸 API 的版本差异。 */
+    private static int overlayW;
+    private static int overlayH;
     private static boolean pendingResize;
 
     private ImguiPresentFix() {
@@ -140,6 +145,8 @@ public final class ImguiPresentFix {
         int fbo = overlayFbo();
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
         overlayRendered = true;
+        overlayW = fbWidth;
+        overlayH = fbHeight;
         // 诊断：renderDrawData 真正执行且通过原版早退条件的证据（绘制链第一环）
         long now = System.currentTimeMillis();
         if (now - lastPrepLogMs > 5000) {
@@ -225,6 +232,9 @@ public final class ImguiPresentFix {
             int framebufferWidth = WindowSizeTracker.getWidth(window);
             int framebufferHeight = WindowSizeTracker.getHeight(window);
 
+            // 诊断：读回 overlay 产出（10 秒一次），区分"没画上"与"合成失效"
+            logOverlayReadback();
+
             compositeScreen = FramebufferUtils.resizeOrCreateFramebuffer(
                     compositeScreen, framebufferWidth, framebufferHeight, false);
             FramebufferUtils.clear(compositeScreen, 0);
@@ -257,6 +267,52 @@ public final class ImguiPresentFix {
         } catch (Throwable t) {
             Flashback.LOGGER.error("[flashback-androidfix] composite build failed", t);
             return null;
+        }
+    }
+
+    /**
+     * 诊断：读回 overlay 离屏内容（10 秒一次），统计 alpha 非零样本，
+     * 一次性区分"imgui 绘制无产出（裸 immediate-mode 失效方向）"与
+     * "产出正常但合成/采样环节失效"。
+     */
+    private static void logOverlayReadback() {
+        long now = System.currentTimeMillis();
+        if (now - lastReadLogMs < 10000) {
+            return;
+        }
+        lastReadLogMs = now;
+        int w = overlayW;
+        int h = overlayH;
+        int fbo = overlayFbo();
+        if (w <= 0 || h <= 0 || fbo <= 0) {
+            Flashback.LOGGER.warn("[flashback-androidfix] overlay readback skipped: {}x{} fbo={}", w, h, fbo);
+            return;
+        }
+        int prevFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+            java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(4);
+            int nonZero = 0;
+            int sampled = 0;
+            // 8 条横带、每带 64 点：覆盖全屏高度分布，避免只采到空白区
+            for (int band = 0; band < 8; band++) {
+                int y = h * (band * 2 + 1) / 16;
+                for (int i = 0; i < 64; i++) {
+                    int x = w * (i * 2 + 1) / 128;
+                    px.clear();
+                    GL11.glReadPixels(x, y, 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, px);
+                    sampled++;
+                    if (px.get(3) != 0) {
+                        nonZero++;
+                    }
+                }
+            }
+            Flashback.LOGGER.info("[flashback-androidfix] overlay readback: {}/{} non-transparent samples",
+                    nonZero, sampled);
+        } catch (Throwable t) {
+            Flashback.LOGGER.warn("[flashback-androidfix] overlay readback failed: {}", t.toString());
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
         }
     }
 
